@@ -29,6 +29,11 @@
     </section>
 
     <section class="card hidden" id="protected-card">
+      <div class="account-summary" aria-live="polite">
+        <p class="logged-in-label">Logged in as</p>
+        <p class="logged-in-email" id="logged-in-email">Not signed in</p>
+        <button type="button" class="logout-button" id="logout-button">Log Out</button>
+      </div>
       <div class="site-status-bar" id="site-status-bar" aria-live="polite"></div>
       <nav class="top-nav" aria-label="Primary navigation">
         <button type="button" class="nav-link active" data-page="home">Home</button>
@@ -42,7 +47,6 @@
         <p id="page-text">This is the home page.</p>
         <div id="page-body"></div>
       </div>
-      <button id="logout-button">Log Out</button>
     </section>
   </main>
 

@@ -21,14 +21,46 @@ let isSignUpMode = false;
 let currentPage = 'home';
 let selectedContest = null;
 let currentUserEmail = null;
+let currentEditingPlayerName = null;
 let selectedWeek = 2;
 let selectedTeam = null;
-const testContestWeek = 2;
 let selectedTeams = [];
 let selectedLock = null;
 let myPicks = loadPicks();
 let superLocks = loadSuperLocks();
 let joinedContests = loadJoinedContests();
+
+const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
+const USER_ROLES = {
+  PLAYER: 'Player',
+  COMMISSIONER: 'Commissioner'
+};
+
+function getCurrentUserRole(email = currentUserEmail) {
+  if (email && email.toLowerCase() === COMMISSIONER_EMAIL.toLowerCase()) {
+    return USER_ROLES.COMMISSIONER;
+  }
+  return USER_ROLES.PLAYER;
+}
+
+function isCurrentUserCommissioner(email = currentUserEmail) {
+  return getCurrentUserRole(email) === USER_ROLES.COMMISSIONER;
+}
+
+function updateLoggedInUserDisplay() {
+  const loggedInEmail = document.getElementById('logged-in-email');
+  if (!loggedInEmail) {
+    return;
+  }
+
+  if (!currentUserEmail) {
+    loggedInEmail.textContent = 'Not signed in';
+    return;
+  }
+
+  const role = getCurrentUserRole();
+  loggedInEmail.innerHTML = `${currentUserEmail}<br /><span class="logged-in-role">Role: ${role}</span>`;
+}
 
 const nflBaseSpreads = [
   { name: 'Buffalo Bills', base: -5.5 },
@@ -100,6 +132,87 @@ const teamAbbreviations = {
   'Arizona Cardinals': 'ARI'
 };
 
+const teamNameAliases = {
+  Patriots: 'New England Patriots',
+  'New England Patriots': 'New England Patriots',
+  Seahawks: 'Seattle Seahawks',
+  'Seattle Seahawks': 'Seattle Seahawks',
+  '49ers': 'San Francisco 49ers',
+  'San Francisco 49ers': 'San Francisco 49ers',
+  Rams: 'Los Angeles Rams',
+  'Los Angeles Rams': 'Los Angeles Rams',
+  Saints: 'New Orleans Saints',
+  'New Orleans Saints': 'New Orleans Saints',
+  Lions: 'Detroit Lions',
+  'Detroit Lions': 'Detroit Lions',
+  Bills: 'Buffalo Bills',
+  'Buffalo Bills': 'Buffalo Bills',
+  Texans: 'Houston Texans',
+  'Houston Texans': 'Houston Texans',
+  Ravens: 'Baltimore Ravens',
+  'Baltimore Ravens': 'Baltimore Ravens',
+  Colts: 'Indianapolis Colts',
+  'Indianapolis Colts': 'Indianapolis Colts',
+  Bears: 'Chicago Bears',
+  'Chicago Bears': 'Chicago Bears',
+  Panthers: 'Carolina Panthers',
+  'Carolina Panthers': 'Carolina Panthers',
+  Buccaneers: 'Tampa Bay Buccaneers',
+  'Tampa Bay Buccaneers': 'Tampa Bay Buccaneers',
+  Bengals: 'Cincinnati Bengals',
+  'Cincinnati Bengals': 'Cincinnati Bengals',
+  Falcons: 'Atlanta Falcons',
+  'Atlanta Falcons': 'Atlanta Falcons',
+  Steelers: 'Pittsburgh Steelers',
+  'Pittsburgh Steelers': 'Pittsburgh Steelers',
+  Jets: 'New York Jets',
+  'New York Jets': 'New York Jets',
+  Titans: 'Tennessee Titans',
+  'Tennessee Titans': 'Tennessee Titans',
+  Browns: 'Cleveland Browns',
+  'Cleveland Browns': 'Cleveland Browns',
+  Jaguars: 'Jacksonville Jaguars',
+  'Jacksonville Jaguars': 'Jacksonville Jaguars',
+  Commanders: 'Washington Commanders',
+  'Washington Commanders': 'Washington Commanders',
+  Eagles: 'Philadelphia Eagles',
+  'Philadelphia Eagles': 'Philadelphia Eagles',
+  Cardinals: 'Arizona Cardinals',
+  'Arizona Cardinals': 'Arizona Cardinals',
+  Chargers: 'Los Angeles Chargers',
+  'Los Angeles Chargers': 'Los Angeles Chargers',
+  Dolphins: 'Miami Dolphins',
+  'Miami Dolphins': 'Miami Dolphins',
+  Raiders: 'Las Vegas Raiders',
+  'Las Vegas Raiders': 'Las Vegas Raiders',
+  Packers: 'Green Bay Packers',
+  'Green Bay Packers': 'Green Bay Packers',
+  Vikings: 'Minnesota Vikings',
+  'Minnesota Vikings': 'Minnesota Vikings',
+  Cowboys: 'Dallas Cowboys',
+  'Dallas Cowboys': 'Dallas Cowboys',
+  Giants: 'New York Giants',
+  'New York Giants': 'New York Giants',
+  Broncos: 'Denver Broncos',
+  'Denver Broncos': 'Denver Broncos',
+  Chiefs: 'Kansas City Chiefs',
+  'Kansas City Chiefs': 'Kansas City Chiefs'
+};
+
+function normalizeTeamName(team) {
+  if (!team || typeof team !== 'string') {
+    return team;
+  }
+  return teamNameAliases[team] || team;
+}
+
+function getMatchupKey(matchup) {
+  if (!matchup) {
+    return null;
+  }
+  return [normalizeTeamName(matchup.away), normalizeTeamName(matchup.home)].sort().join('||');
+}
+
 const week1Matchups = [
   { away: 'Patriots', home: 'Seahawks', homeLine: '-3.5', day: 'Thu', time: '1:00 PM ET' },
   { away: '49ers', home: 'Rams', homeLine: '-2.5', day: 'Sun', time: '4:05 PM ET' },
@@ -134,13 +247,20 @@ function updateSiteStatusBar() {
   }
 
   const now = new Date();
-  const formatter = new Intl.DateTimeFormat([], {
+  const currentWeek = getCurrentContestWeek(now);
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const timeFormatter = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
     hour12: true
   });
-  siteStatusBar.textContent = `Week 2 • Local time: ${formatter.format(now)}`;
+  siteStatusBar.textContent = `Week ${currentWeek} - ${dateFormatter.format(now)} • ${timeFormatter.format(now)}`;
 }
 
 function startLiveClock() {
@@ -157,23 +277,7 @@ function getMatchupSortValue(matchup) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  if (testContestWeek) {
-    return testContestWeek;
-  }
-
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
-  const currentDate = new Date(year, month, day);
-  const startOfWeek = new Date(currentDate);
-  const dayOfWeek = currentDate.getDay();
-  const daysToWednesday = (dayOfWeek + 5) % 7;
-  startOfWeek.setDate(currentDate.getDate() - daysToWednesday);
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const referenceDate = new Date(2024, 8, 4);
-  const diffInDays = Math.floor((startOfWeek - referenceDate) / 86_400_000);
-  return Math.floor(diffInDays / 7) + 1;
+  return 2;
 }
 
 function loadPicks() {
@@ -186,6 +290,17 @@ function loadPicks() {
 
 function savePicks() {
   localStorage.setItem('super7-picks', JSON.stringify(myPicks));
+}
+
+function clearAllSavedPicks() {
+  myPicks = [];
+  superLocks = {};
+  localStorage.removeItem('super7-picks');
+  localStorage.removeItem('super7-super-locks');
+  localStorage.removeItem('super7-standings-users');
+  savePicks();
+  saveSuperLocks();
+  saveStandingsUsers([]);
 }
 
 function loadSuperLocks() {
@@ -225,14 +340,19 @@ function isContestJoined(contestId) {
 
 function loadTestScores() {
   try {
-    return JSON.parse(localStorage.getItem('super7-test-scores') || '{}');
+    localStorage.removeItem('super7-test-scores');
   } catch {
-    return {};
+    // ignore
   }
+  return {};
 }
 
 function saveTestScores() {
-  localStorage.setItem('super7-test-scores', JSON.stringify(testScores));
+  try {
+    localStorage.removeItem('super7-test-scores');
+  } catch {
+    // ignore
+  }
 }
 
 function getDisplayName(email = currentUserEmail) {
@@ -302,16 +422,16 @@ function saveStandingsUsers(users) {
   localStorage.setItem('super7-standings-users', JSON.stringify(users));
 }
 
+function getCurrentUserDisplayLabel() {
+  return getDisplayName(currentUserEmail);
+}
+
 function setTestScore(week, away, home, awayScore, homeScore) {
-  const key = `${week}|${away}@${home}`;
-  testScores[key] = { awayScore: Number(awayScore), homeScore: Number(homeScore) };
   saveTestScores();
+  return;
 }
 
 let testScores = loadTestScores();
-
-// For testing: pretend Jaguars (home) beat Browns 10-3 in Week 1
-setTestScore(1, 'Browns', 'Jaguars', 3, 10);
 
 function getPicksForWeek(week) {
   return myPicks.filter((pick) => pick.week === week);
@@ -372,8 +492,17 @@ function canEditMatchup(matchup, week) {
   return canEditPicksForWeek(week);
 }
 
-function canEditPicksForWeek(week) {
-  return Number(week) === getCurrentContestWeek();
+function canEditPicksForWeek(week, email = currentUserEmail, playerId = 'me') {
+  const weekNumber = Number(week);
+  if (!Number.isFinite(weekNumber) || weekNumber < 1 || weekNumber > 18) {
+    return false;
+  }
+
+  if (isCurrentUserCommissioner(email)) {
+    return true;
+  }
+
+  return playerId === 'me';
 }
 
 function getMatchupForPick(pick) {
@@ -394,17 +523,32 @@ function generateActualScore(week, matchup) {
 }
 
 function getPickOutcome(pick, matchup) {
-  let awayScore = 0, homeScore = 0;
-  if (matchup) {
-    const key = `${pick.week}|${matchup.away}@${matchup.home}`;
-    const override = testScores && testScores[key];
-    if (override) {
-      awayScore = Number(override.awayScore);
-      homeScore = Number(override.homeScore);
-    } else {
-      ({ awayScore, homeScore } = generateActualScore(pick.week, matchup));
-    }
+  if (!matchup) {
+    return {
+      awayScore: null,
+      homeScore: null,
+      score: '',
+      correct: false,
+      push: false,
+      hasResult: false
+    };
   }
+
+  const key = `${pick.week}|${matchup.away}@${matchup.home}`;
+  const override = testScores && testScores[key];
+  if (!override) {
+    return {
+      awayScore: null,
+      homeScore: null,
+      score: '',
+      correct: false,
+      push: false,
+      hasResult: false
+    };
+  }
+
+  const awayScore = Number(override.awayScore);
+  const homeScore = Number(override.homeScore);
   const spread = Number(matchup.homeLine);
   const cover = pick.team === matchup.home ? homeScore - awayScore + spread : awayScore - homeScore - spread;
   const push = Math.abs(cover) < 0.5;
@@ -414,7 +558,8 @@ function getPickOutcome(pick, matchup) {
     homeScore,
     score: `${awayScore}-${homeScore}`,
     correct,
-    push
+    push,
+    hasResult: true
   };
 }
 
@@ -492,43 +637,84 @@ function formatSelection(matchups, selectedTeam) {
   return selectedTeam;
 }
 
-function updatePickedTeam(week, matchupIndex, team) {
-  const matchup = contests.super7.weeks[week - 1].matchups[matchupIndex];
-  const opponent = team === matchup.home ? matchup.away : matchup.home;
+function normalizeSelectedTeamsForWeek(week, teams) {
+  const matchups = contests.super7.weeks[week - 1]?.matchups || [];
+  const cleaned = [];
+  const matchupIndexByKey = new Map();
 
-  if (selectedTeams.includes(team)) {
-    selectedTeams = selectedTeams.filter((item) => item !== team);
+  teams.forEach((team) => {
+    const normalizedTeam = normalizeTeamName(team);
+    const matchup = matchups.find((item) => normalizeTeamName(item.away) === normalizedTeam || normalizeTeamName(item.home) === normalizedTeam);
+    if (!matchup) {
+      cleaned.push(normalizedTeam);
+      return;
+    }
+
+    const matchupKey = getMatchupKey(matchup);
+    if (matchupIndexByKey.has(matchupKey)) {
+      const existingIndex = matchupIndexByKey.get(matchupKey);
+      cleaned[existingIndex] = normalizedTeam;
+      return;
+    }
+
+    matchupIndexByKey.set(matchupKey, cleaned.length);
+    cleaned.push(normalizedTeam);
+  });
+
+  return cleaned;
+}
+
+function getMatchupForKey(week, matchupKey) {
+  const matchups = contests.super7.weeks[week - 1]?.matchups || [];
+  return matchups.find((matchup) => getMatchupKey(matchup) === matchupKey);
+}
+
+function updatePickedTeam(week, matchupIdentifier, team) {
+  const matchup = typeof matchupIdentifier === 'string'
+    ? getMatchupForKey(week, matchupIdentifier)
+    : contests.super7.weeks[week - 1].matchups[matchupIdentifier];
+
+  if (!matchup) {
+    return;
+  }
+
+  const matchupTeams = [normalizeTeamName(matchup.away), normalizeTeamName(matchup.home)];
+  const normalizedTeam = normalizeTeamName(team);
+
+  selectedTeams = normalizeSelectedTeamsForWeek(week, selectedTeams);
+
+  if (selectedTeams.includes(normalizedTeam)) {
+    selectedTeams = selectedTeams.filter((item) => item !== normalizedTeam);
     if (selectedLock && !selectedTeams.includes(selectedLock)) {
       selectedLock = null;
     }
     return;
   }
 
-  if (selectedTeams.includes(opponent)) {
-    selectedTeams = selectedTeams.filter((item) => item !== opponent);
-  }
+  selectedTeams = selectedTeams.filter((item) => !matchupTeams.includes(normalizeTeamName(item)));
 
   if (selectedTeams.length >= 7) {
     showMessage('You must select exactly 7 games before saving.');
     return;
   }
 
-  selectedTeams.push(team);
+  selectedTeams.push(normalizedTeam);
   if (selectedLock && !selectedTeams.includes(selectedLock)) {
     selectedLock = null;
   }
 }
 
-function saveWeekPicks() {
+function saveWeekPicks(playerName = null) {
+  selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, selectedTeams);
   const weekMatchups = contests.super7.weeks[selectedWeek - 1].matchups;
   if (selectedTeams.length !== 7) {
     showMessage('You must select exactly 7 games before saving.');
-    return;
+    return false;
   }
 
   if (!selectedLock || !selectedTeams.includes(selectedLock)) {
     showMessage('You must choose a Super Lock before saving.');
-    return;
+    return false;
   }
 
   if (selectedLock && !selectedTeams.includes(selectedLock)) {
@@ -554,6 +740,28 @@ function saveWeekPicks() {
     };
   });
 
+  const targetName = playerName || getCurrentUserDisplayLabel();
+  if (playerName && playerName !== getCurrentUserDisplayLabel()) {
+    const standingsUsers = loadStandingsUsers();
+    const userIndex = standingsUsers.findIndex((user) => user.name === targetName);
+    const targetUser = userIndex >= 0 ? standingsUsers[userIndex] : { name: targetName, picks: [], superLocks: {} };
+    targetUser.picks = (Array.isArray(targetUser.picks) ? targetUser.picks : []).filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
+    targetUser.superLocks = targetUser.superLocks || {};
+    if (selectedLock) {
+      targetUser.superLocks[selectedWeek] = selectedLock;
+    } else {
+      delete targetUser.superLocks[selectedWeek];
+    }
+    if (userIndex >= 0) {
+      standingsUsers[userIndex] = targetUser;
+    } else {
+      standingsUsers.push(targetUser);
+    }
+    saveStandingsUsers(standingsUsers);
+    showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek}.`);
+    return true;
+  }
+
   myPicks = myPicks.filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
   savePicks();
 
@@ -565,6 +773,7 @@ function saveWeekPicks() {
   saveSuperLocks();
 
   showMessage(`Saved ${selectedTeams.length} picks for Week ${selectedWeek}.`);
+  return true;
 }
 
 function generateWeekMatchups(week) {
@@ -635,6 +844,7 @@ loginForm.addEventListener('submit', function (event) {
     })
     .then(function (result) {
       currentUserEmail = result.email;
+      updateLoggedInUserDisplay();
       loginForm.reset();
       showProtectedPage();
     })
@@ -658,6 +868,7 @@ logoutButton.addEventListener('click', function () {
   fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
     .finally(function () {
       currentUserEmail = null;
+      updateLoggedInUserDisplay();
       formMessage.textContent = '';
       loginCard.classList.remove('hidden');
       protectedCard.classList.add('hidden');
@@ -682,6 +893,7 @@ function checkSession() {
     .then(function (result) {
       if (result?.email) {
         currentUserEmail = result.email;
+        updateLoggedInUserDisplay();
         showProtectedPage();
       }
     });
@@ -764,13 +976,16 @@ function renderContestsPage() {
   const isJoined = isContestJoined(contests.super7.id);
   updateSiteStatusBar();
 
+  const currentWeek = getCurrentContestWeek();
+  const currentWeekPicks = myPicks.filter((pick) => pick.week === currentWeek).length;
+
   pageBody.innerHTML = `
     <div class="contest-list">
       <div class="contest-card">
         <div class="contest-card-header">
           <h2>${contests.super7.name}</h2>
           <p>${contests.super7.description}</p>
-          <p><strong>${myPicks.length}</strong> of 7 picks saved.</p>
+          <p><strong>${currentWeekPicks}</strong> of 7 picks saved for Week ${currentWeek}.</p>
         </div>
         <button type="button" class="select-contest-button" data-contest="super7">${isJoined ? 'View Super 7' : 'Join Super 7'}</button>
         <button type="button" class="secondary-button" id="view-my-picks">View My Picks</button>
@@ -806,12 +1021,34 @@ function renderContestsPage() {
 function renderSuper7Contest() {
   const contest = contests.super7;
   const currentWeek = getCurrentContestWeek();
-  const availableWeeks = contest.weeks.filter((week) => week.week <= currentWeek);
-  if (!selectedWeek || selectedWeek > currentWeek) {
+  const currentUserLabel = getCurrentUserDisplayLabel();
+  const players = (() => {
+    const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
+    if (isCurrentUserCommissioner()) {
+      const otherUsers = loadStandingsUsers().filter((user) => user.name !== currentUserLabel);
+      otherUsers.forEach((user) => {
+        list.push({
+          id: user.name,
+          label: user.name,
+          picks: Array.isArray(user.picks) ? user.picks : [],
+          superLocks: user.superLocks || {}
+        });
+      });
+    }
+    return list;
+  })();
+
+  const allAvailableWeeks = Array.from({ length: currentWeek }, (_, index) => index + 1).reverse();
+  if (!Number.isFinite(selectedWeek) || selectedWeek < 1 || selectedWeek > currentWeek) {
     selectedWeek = currentWeek;
   }
-  const weekData = selectedWeek ? contest.weeks[selectedWeek - 1] : null;
-  const isEditableWeek = selectedWeek === currentWeek && canEditPicksForWeek(selectedWeek);
+  const activePlayer = players.find((player) => player.id === currentEditingPlayerName || player.label === currentEditingPlayerName) || players[0];
+  const activeWeek = allAvailableWeeks.includes(Number(selectedWeek)) ? Number(selectedWeek) : currentWeek;
+  selectedWeek = activeWeek;
+  const selectedPlayerId = activePlayer.id;
+
+  const weekData = activeWeek ? contest.weeks[activeWeek - 1] : null;
+  const isEditableWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id);
   pageTitle.textContent = contest.name;
   pageText.textContent = contest.description;
   const sortedMatchups = [...(weekData?.matchups || [])].sort((a, b) => {
@@ -821,38 +1058,54 @@ function renderSuper7Contest() {
   });
 
   pageBody.innerHTML = `
+    <div class="contest-card picks-filter-card">
+      <div class="picks-filter-bar">
+        <div class="picks-filter-field">
+          <label for="super7-week-select">Week</label>
+          <select id="super7-week-select">
+            ${allAvailableWeeks.map((week) => `
+              <option value="${week}" ${week === activeWeek ? 'selected' : ''}>Week ${week}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div class="picks-filter-field">
+          <label for="super7-player-select">Player</label>
+          <select id="super7-player-select">
+            ${players.map((player) => `
+              <option value="${player.id}" ${player.id === selectedPlayerId ? 'selected' : ''}>${player.label}</option>
+            `).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div class="contest-card">
       <div class="contest-card-header">
         <h2>${contest.name}</h2>
-        <p>Super 7 - Week ${selectedWeek || 1}</p>
       </div>
-      <div class="week-selector">
-        ${availableWeeks.map((week) => `
-          <button type="button" class="week-button${week.week === selectedWeek ? ' active' : ''}" data-week="${week.week}">Wk ${week.week}</button>
-        `).join('')}
-      </div>
-      ${selectedWeek ? `
+      ${activeWeek ? `
         <div class="contest-summary">
-          <p>${isEditableWeek ? `Select 7 games for Week ${selectedWeek}. You must choose exactly 7 games and one Super Lock before saving.` : `Week ${selectedWeek} is locked for editing.`}</p>
-          <p><strong>${selectedTeams.length}</strong> selected</p>
+          <p>${isEditableWeek ? `Select games for week ${activeWeek}.` : `Week ${activeWeek} is locked for editing.`}</p>
+          <p>${selectedTeams.length} game${selectedTeams.length === 1 ? '' : 's'} selected${selectedLock ? ', 1 super lock selected' : ', 0 super locks selected'}</p>
         </div>
         <div class="matchup-grid">
-          ${sortedMatchups.map((matchup, matchupIndex) => {
+          ${sortedMatchups.map((matchup) => {
             const awayLine = invertLine(matchup.homeLine);
-            const awaySelected = selectedTeams.includes(matchup.away);
-            const homeSelected = selectedTeams.includes(matchup.home);
+            const awaySelected = selectedTeams.includes(normalizeTeamName(matchup.away));
+            const homeSelected = selectedTeams.includes(normalizeTeamName(matchup.home));
+            const matchupKey = getMatchupKey(matchup);
             const matchupDay = matchup.day || 'TBD';
             const matchupTime = matchup.time || 'Time TBD';
             return `
               <div class="matchup-row">
                 <div class="matchup-pick-row">
-                  <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-index="${matchupIndex}" data-team="${matchup.away}" data-away="${matchup.away}" data-home="${matchup.home}" data-home-line="${matchup.homeLine}">${matchup.away} ${awayLine}</button>
-                  ${awaySelected ? `<button type="button" class="super-lock-toggle${selectedLock === matchup.away ? ' active' : ''}" data-team="${matchup.away}" aria-label="${selectedLock === matchup.away ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === matchup.away ? '🔒' : '🔓'}</button>` : ''}
+                  <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.away)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}">${matchup.away} ${awayLine}</button>
+                  ${awaySelected ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.away) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.away)}" aria-label="${selectedLock === normalizeTeamName(matchup.away) ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === normalizeTeamName(matchup.away) ? '🔒' : '🔓'}</button>` : ''}
                 </div>
                 <span class="matchup-vs">@</span>
                 <div class="matchup-pick-row">
-                  <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-index="${matchupIndex}" data-team="${matchup.home}" data-away="${matchup.away}" data-home="${matchup.home}" data-home-line="${matchup.homeLine}">${matchup.home} ${matchup.homeLine}</button>
-                  ${homeSelected ? `<button type="button" class="super-lock-toggle${selectedLock === matchup.home ? ' active' : ''}" data-team="${matchup.home}" aria-label="${selectedLock === matchup.home ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === matchup.home ? '🔒' : '🔓'}</button>` : ''}
+                  <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.home)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}">${matchup.home} ${matchup.homeLine}</button>
+                  ${homeSelected ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.home) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.home)}" aria-label="${selectedLock === normalizeTeamName(matchup.home) ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === normalizeTeamName(matchup.home) ? '🔒' : '🔓'}</button>` : ''}
                 </div>
                 <div class="matchup-time">${matchupDay} • ${matchupTime}</div>
               </div>
@@ -873,19 +1126,30 @@ function renderSuper7Contest() {
     </div>
   `;
 
-    pageBody.querySelectorAll('.week-button').forEach((button) => {
-    button.addEventListener('click', function () {
-      const week = Number(button.dataset.week);
-      if (week !== getCurrentContestWeek()) {
-        showPopupMessage(`Week ${week} is locked and can't be edited.`);
-        return;
-      }
-      selectedWeek = week;
-      selectedTeams = getPicksForWeek(selectedWeek).map((pick) => pick.team);
-      selectedLock = getSuperLockForWeek(selectedWeek);
+  const weekFilter = pageBody.querySelector('#super7-week-select');
+  if (weekFilter) {
+    weekFilter.addEventListener('change', function () {
+      selectedWeek = Number(weekFilter.value);
+      const player = players.find((entry) => entry.id === (currentEditingPlayerName || 'me')) || players[0];
+      currentEditingPlayerName = player.label;
+      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => pick.team));
+      selectedLock = player.superLocks?.[selectedWeek] || null;
       renderSuper7Contest();
     });
-  });
+  }
+
+  const playerFilter = pageBody.querySelector('#super7-player-select');
+  if (playerFilter) {
+    playerFilter.addEventListener('change', function () {
+      const chosenPlayerId = playerFilter.value;
+      const player = players.find((entry) => entry.id === chosenPlayerId) || players[0];
+      currentEditingPlayerName = chosenPlayerId === 'me' ? null : player.label;
+      selectedWeek = Number(weekFilter?.value || selectedWeek || currentWeek);
+      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => pick.team));
+      selectedLock = player.superLocks?.[selectedWeek] || null;
+      renderSuper7Contest();
+    });
+  }
 
   updateSiteStatusBar();
 
@@ -896,8 +1160,8 @@ function renderSuper7Contest() {
         return;
       }
       const team = button.dataset.team;
-      const matchupIndex = Number(button.dataset.matchupIndex);
-      updatePickedTeam(selectedWeek, matchupIndex, team);
+      const matchupKey = button.dataset.matchupKey;
+      updatePickedTeam(selectedWeek, matchupKey, team);
       renderSuper7Contest();
     });
   });
@@ -909,7 +1173,11 @@ function renderSuper7Contest() {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
         return;
       }
-      saveWeekPicks();
+      const result = saveWeekPicks(currentEditingPlayerName);
+      if (result === false) {
+        showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
+        return;
+      }
       showMessage('Picks saved. Taking you to My Picks.');
       selectPage('mypicks');
     });
@@ -936,6 +1204,12 @@ function renderSuper7Contest() {
       }
       selectedTeams = [];
       selectedLock = null;
+      if (currentEditingPlayerName) {
+        const player = players.find((entry) => entry.id === currentEditingPlayerName || entry.label === currentEditingPlayerName) || players[0];
+        if (player && player.superLocks) {
+          delete player.superLocks[selectedWeek];
+        }
+      }
       showMessage('Cleared selections and Super Lock for this week.');
       renderSuper7Contest();
     });
@@ -956,9 +1230,11 @@ function selectPage(page) {
     link.classList.toggle('active', link.dataset.page === page);
   });
 
+  const lastEditedPlayerName = currentEditingPlayerName;
   selectedContest = null;
   selectedWeek = 1;
   selectedTeam = null;
+  currentEditingPlayerName = null;
 
   if (page === 'home') {
     renderHomePage();
@@ -969,7 +1245,7 @@ function selectPage(page) {
   } else if (page === 'myinfo' || page === 'about') {
     renderMyInfoPage();
   } else if (page === 'mypicks') {
-    renderMyPicksPage();
+    renderMyPicksPage(isCurrentUserCommissioner() && lastEditedPlayerName ? lastEditedPlayerName : 'me');
   } else {
     renderHomePage();
   }
@@ -1010,23 +1286,42 @@ function renderNewsPage() {
   `;
 }
 
-function renderMyPicksPage() {
+function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 2) {
   pageTitle.textContent = 'My Picks';
   pageText.textContent = 'Your saved Super 7 selections.';
   updateSiteStatusBar();
 
-  const currentWeek = getCurrentContestWeek();
-  const picksByWeek = myPicks
-    .sort((a, b) => a.week - b.week)
-    .reduce((groups, pick) => {
-      if (!groups[pick.week]) groups[pick.week] = [];
-      groups[pick.week].push(pick);
-      return groups;
-    }, {});
+  const currentWeek = 2;
+  const visibleWeeks = Array.from({ length: currentWeek }, (_, index) => index + 1).reverse();
+  const currentUserLabel = getCurrentUserDisplayLabel();
+  const players = (() => {
+    const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
+    if (isCurrentUserCommissioner()) {
+      const otherUsers = loadStandingsUsers().filter((user) => user.name !== currentUserLabel);
+      otherUsers.forEach((user) => {
+        list.push({
+          id: user.name,
+          label: user.name,
+          picks: Array.isArray(user.picks) ? user.picks : [],
+          superLocks: user.superLocks || {}
+        });
+      });
+    }
+    return list;
+  })();
 
-  const visibleWeeks = Array.from(new Set([...(Object.keys(picksByWeek).map(Number)), currentWeek]))
-    .filter((week) => week <= currentWeek)
-    .sort((a, b) => a - b);
+  const activePlayer = players.find((player) => player.id === selectedPlayerId) || players[0];
+  const activeWeek = visibleWeeks.includes(Number(selectedWeekValue)) ? Number(selectedWeekValue) : currentWeek;
+  const playerPicks = (activePlayer.picks || []).sort((a, b) => a.week - b.week);
+  const picksByWeek = playerPicks.reduce((groups, pick) => {
+    if (!groups[pick.week]) groups[pick.week] = [];
+    groups[pick.week].push(pick);
+    return groups;
+  }, {});
+  const weekPicks = picksByWeek[activeWeek] || [];
+  const lock = activePlayer.superLocks?.[activeWeek];
+  const isCurrentPlayerView = activePlayer.id === 'me';
+  const canEditSelectedWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id) && (isCurrentPlayerView || isCurrentUserCommissioner());
 
   if (!visibleWeeks.length) {
     pageBody.innerHTML = '<p>You have not saved any picks yet. Go to Contests to join Super 7 and save selections.</p>';
@@ -1034,119 +1329,124 @@ function renderMyPicksPage() {
   }
 
   pageBody.innerHTML = `
-    <div class="contest-list">
-      ${visibleWeeks.map((week) => {
-        const lock = superLocks[week];
-        const weekPicks = picksByWeek[week] || [];
-        const isOpen = week === currentWeek;
-        const showEditButton = week === currentWeek && canEditPicksForWeek(week);
-        return `
-          <div class="contest-card">
-            <button type="button" class="week-dropdown-toggle${isOpen ? ' open' : ''}" data-week="${week}">
-              <span>Week ${week}</span>
-              <span>${isOpen ? '▾' : '▸'}</span>
-            </button>
-            <div class="week-dropdown-content${isOpen ? ' open' : ''}">
-              ${showEditButton ? `<button type="button" class="secondary-button edit-week-picks-button" data-week="${week}">Edit Picks</button>` : ''}
-              ${weekPicks.length
-                ? `<table class="mypicks-table">
-                    <thead>
-                      <tr>
-                        <th>Pick</th>
-                        <th>Score</th>
-                        <th>Result</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${weekPicks
-                        .map((pick) => {
-                          const matchup = getMatchupForPick(pick);
-                          const outcome = getPickOutcome(pick, matchup);
-                          const opponent = pick.team === pick.home ? pick.away : pick.home;
-                          const pickText = pick.team === pick.home
-                            ? `${opponent} @ <strong class="pick-choice">${pick.team} ${pick.line}</strong>`
-                            : `<strong class="pick-choice">${pick.team} ${pick.line}</strong> @ ${opponent}`;
-                          const lockText = lock === pick.team ? ' <span class="pick-lock-label">(Super Lock)</span>' : '';
-                          let resultMark = '';
-                          if (outcome.push) {
-                            resultMark = lock === pick.team
-                              ? '<span class="result-mark push">=</span><span class="result-mark push">=</span>'
-                              : '<span class="result-mark push">=</span>';
-                          } else if (lock === pick.team) {
-                            resultMark = outcome.correct
-                              ? '<span class="result-mark correct">✅</span><span class="result-mark correct">✅</span>'
-                              : '<span class="result-mark incorrect">❌</span><span class="result-mark incorrect">❌</span>';
-                          } else {
-                            resultMark = outcome.correct
-                              ? '<span class="result-mark correct">✅</span>'
-                              : '<span class="result-mark incorrect">❌</span>';
-                          }
-                          const pickedAbbrev = teamAbbreviations[pick.team] || pick.team;
-                          const opponentAbbrev = teamAbbreviations[opponent] || opponent;
-                          const spreadDisplay = `(${pick.line})`;
-                          const firstLine = pick.team === pick.home
-                            ? `${pickedAbbrev} ${spreadDisplay} ${outcome.homeScore}`
-                            : `${pickedAbbrev} ${spreadDisplay} ${outcome.awayScore}`;
-                          const secondLine = pick.team === pick.home
-                            ? `${opponentAbbrev} ${outcome.awayScore}`
-                            : `${opponentAbbrev} ${outcome.homeScore}`;
-                          return `
-                            <tr>
-                              <td>${pickText}${lockText}</td>
-                              <td class="stacked-score"><div>${firstLine}</div><div>${secondLine}</div></td>
-                              <td>${resultMark}</td>
-                            </tr>
-                          `;
-                        })
-                        .join('')}
-                    </tbody>
-                  </table>`
-                : '<p class="help-text">No picks saved for this week yet.</p>'}
-            </div>
-          </div>
-        `;
-      }).join('')}
+    <div class="contest-card picks-filter-card">
+      <div class="picks-filter-bar">
+        <div class="picks-filter-field">
+          <label for="picks-week-select">Week</label>
+          <select id="picks-week-select">
+            ${visibleWeeks.map((week) => `
+              <option value="${week}" ${week === activeWeek ? 'selected' : ''}>Week ${week}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div class="picks-filter-field">
+          <label for="picks-player-select">Player</label>
+          <select id="picks-player-select">
+            ${players.map((player) => `
+              <option value="${player.id}" ${player.id === activePlayer.id ? 'selected' : ''}>${player.label}</option>
+            `).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="contest-card picks-results-card">
+      ${canEditSelectedWeek ? `<button type="button" class="secondary-button edit-week-picks-button" data-week="${activeWeek}">Edit Picks</button>` : ''}
+      ${weekPicks.length
+        ? `<table class="mypicks-table">
+            <thead>
+              <tr>
+                <th>Pick</th>
+                <th>Score</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${weekPicks
+                .map((pick) => {
+                  const matchup = getMatchupForPick(pick);
+                  const outcome = getPickOutcome(pick, matchup);
+                  const opponent = pick.team === pick.home ? pick.away : pick.home;
+                  const pickText = pick.team === pick.home
+                    ? `${opponent} @ <strong class="pick-choice">${pick.team} ${pick.line}</strong>`
+                    : `<strong class="pick-choice">${pick.team} ${pick.line}</strong> @ ${opponent}`;
+                  const lockText = lock === pick.team ? ' <span class="pick-lock-label">(Super Lock)</span>' : '';
+                  let resultMark = '';
+                  if (outcome.hasResult) {
+                    if (outcome.push) {
+                      resultMark = lock === pick.team
+                        ? '<span class="result-mark push">=</span><span class="result-mark push">=</span>'
+                        : '<span class="result-mark push">=</span>';
+                    } else if (lock === pick.team) {
+                      resultMark = outcome.correct
+                        ? '<span class="result-mark correct">✅</span><span class="result-mark correct">✅</span>'
+                        : '<span class="result-mark incorrect">❌</span><span class="result-mark incorrect">❌</span>';
+                    } else {
+                      resultMark = outcome.correct
+                        ? '<span class="result-mark correct">✅</span>'
+                        : '<span class="result-mark incorrect">❌</span>';
+                    }
+                  }
+                  const pickedAbbrev = teamAbbreviations[pick.team] || pick.team;
+                  const opponentAbbrev = teamAbbreviations[opponent] || opponent;
+                  const spreadDisplay = `(${pick.line})`;
+                  const firstLine = outcome.hasResult
+                    ? (pick.team === pick.home
+                        ? `${pickedAbbrev} ${spreadDisplay} ${outcome.homeScore}`
+                        : `${pickedAbbrev} ${spreadDisplay} ${outcome.awayScore}`)
+                    : '—';
+                  const secondLine = outcome.hasResult
+                    ? (pick.team === pick.home
+                        ? `${opponentAbbrev} ${outcome.awayScore}`
+                        : `${opponentAbbrev} ${outcome.homeScore}`)
+                    : '—';
+                  return `
+                    <tr>
+                      <td>${pickText}${lockText}</td>
+                      <td class="stacked-score"><div>${firstLine}</div><div>${secondLine}</div></td>
+                      <td>${resultMark}</td>
+                    </tr>
+                  `;
+                })
+                .join('')}
+            </tbody>
+          </table>`
+        : '<p class="help-text">No picks saved for this week yet.</p>'}
     </div>
   `;
 
-  pageBody.querySelectorAll('.week-dropdown-toggle').forEach((button) => {
-    button.addEventListener('click', function () {
-      const week = button.dataset.week;
-      const content = button.nextElementSibling;
-      const isOpen = button.classList.contains('open');
-
-      pageBody.querySelectorAll('.week-dropdown-toggle').forEach((toggle) => {
-        toggle.classList.remove('open');
-        const panel = toggle.nextElementSibling;
-        if (panel) {
-          panel.classList.remove('open');
-        }
-      });
-
-      if (!isOpen) {
-        button.classList.add('open');
-        if (content) {
-          content.classList.add('open');
-        }
-      }
+  const weekFilter = pageBody.querySelector('#picks-week-select');
+  if (weekFilter) {
+    weekFilter.addEventListener('change', function () {
+      renderMyPicksPage(activePlayer.id, Number(weekFilter.value));
     });
-  });
+  }
 
-  pageBody.querySelectorAll('.edit-week-picks-button').forEach((button) => {
-    button.addEventListener('click', function () {
-      const week = Number(button.dataset.week);
-      if (!canEditPicksForWeek(week)) {
-        showMessage('Picks can no longer be edited once games start.');
+  const playerFilter = pageBody.querySelector('#picks-player-select');
+  if (playerFilter) {
+    playerFilter.addEventListener('change', function () {
+      currentEditingPlayerName = null;
+      renderMyPicksPage(playerFilter.value, activeWeek);
+    });
+  }
+
+  const editButton = pageBody.querySelector('.edit-week-picks-button');
+  if (editButton) {
+    editButton.addEventListener('click', function () {
+      const week = Number(editButton.dataset.week);
+      if (!canEditPicksForWeek(week, currentUserEmail, activePlayer.id)) {
+        showMessage('You do not have permission to edit these picks.');
         return;
       }
 
       selectedWeek = week;
-      selectedTeams = getPicksForWeek(selectedWeek).map((pick) => pick.team);
-      selectedLock = getSuperLockForWeek(selectedWeek);
+      selectedTeams = normalizeSelectedTeamsForWeek(week, (activePlayer.picks || []).filter((pick) => pick.week === week).map((pick) => pick.team));
+      selectedLock = activePlayer.superLocks?.[week] || null;
+      currentEditingPlayerName = isCurrentUserCommissioner() && !isCurrentPlayerView ? activePlayer.label : null;
       selectedContest = contests.super7.id;
       renderSuper7Contest();
     });
-  });
+  }
 }
 
 function showMessage(message) {
@@ -1180,6 +1480,7 @@ function hidePopupMessage() {
 function showProtectedPage() {
   loginCard.classList.add('hidden');
   protectedCard.classList.remove('hidden');
+  updateLoggedInUserDisplay();
 
   if (hasSavedPicksForCurrentWeek()) {
     currentPage = 'mypicks';
