@@ -22,7 +22,7 @@ let currentPage = 'home';
 let selectedContest = null;
 let currentUserEmail = null;
 let currentEditingPlayerName = null;
-let selectedWeek = 2;
+let selectedWeek = 1;
 let selectedTeam = null;
 let selectedTeams = [];
 let selectedLock = null;
@@ -213,23 +213,143 @@ function getMatchupKey(matchup) {
   return [normalizeTeamName(matchup.away), normalizeTeamName(matchup.home)].sort().join('||');
 }
 
+const weekZeroWinTotals = [
+  { team: 'Arizona Cardinals', winTotal: 3.5 },
+  { team: 'Atlanta Falcons', winTotal: 7.5 },
+  { team: 'Baltimore Ravens', winTotal: 11.5 },
+  { team: 'Buffalo Bills', winTotal: 10.5 },
+  { team: 'Carolina Panthers', winTotal: 7.5 },
+  { team: 'Chicago Bears', winTotal: 9.5 },
+  { team: 'Cincinnati Bengals', winTotal: 10.5 },
+  { team: 'Cleveland Browns', winTotal: 5.5 },
+  { team: 'Dallas Cowboys', winTotal: 9.5 },
+  { team: 'Denver Broncos', winTotal: 9.5 },
+  { team: 'Detroit Lions', winTotal: 10.5 },
+  { team: 'Green Bay Packers', winTotal: 9.5 },
+  { team: 'Houston Texans', winTotal: 9.5 },
+  { team: 'Indianapolis Colts', winTotal: 7.5 },
+  { team: 'Jacksonville Jaguars', winTotal: 8.5 },
+  { team: 'Kansas City Chiefs', winTotal: 10.5 },
+  { team: 'Las Vegas Raiders', winTotal: 5.5 },
+  { team: 'Los Angeles Chargers', winTotal: 9.5 },
+  { team: 'Los Angeles Rams', winTotal: 11.5 },
+  { team: 'Miami Dolphins', winTotal: 3.5 },
+  { team: 'Minnesota Vikings', winTotal: 8.5 },
+  { team: 'New England Patriots', winTotal: 10 },
+  { team: 'New Orleans Saints', winTotal: 7.5 },
+  { team: 'New York Giants', winTotal: 7.5 },
+  { team: 'New York Jets', winTotal: 5.5 },
+  { team: 'Philadelphia Eagles', winTotal: 11.5 },
+  { team: 'Pittsburgh Steelers', winTotal: 8.5 },
+  { team: 'San Francisco 49ers', winTotal: 9.5 },
+  { team: 'Seattle Seahawks', winTotal: 10.5 },
+  { team: 'Tampa Bay Buccaneers', winTotal: 8.5 },
+  { team: 'Tennessee Titans', winTotal: 6.5 },
+  { team: 'Washington Commanders', winTotal: 7.5 }
+];
+
+function isWeekZero(week) {
+  return Number(week) === 0;
+}
+
+function getWeekData(week) {
+  const weekNumber = Number(week);
+  if (!Number.isFinite(weekNumber)) {
+    return null;
+  }
+  return contests.super7.weeks.find((entry) => entry.week === weekNumber) || null;
+}
+
+function getWeekZeroSelectionKey(team, choice) {
+  return `${normalizeTeamName(team)}::${choice}`;
+}
+
+function parseWeekZeroSelectionKey(selectionKey) {
+  if (!selectionKey || typeof selectionKey !== 'string' || !selectionKey.includes('::')) {
+    return null;
+  }
+  const [team, choice] = selectionKey.split('::');
+  if (!team || (choice !== 'under' && choice !== 'over')) {
+    return null;
+  }
+  return {
+    team: normalizeTeamName(team),
+    choice
+  };
+}
+
+function getPickSelectionKey(pick) {
+  if (isWeekZero(pick?.week) && (pick?.choice === 'under' || pick?.choice === 'over')) {
+    return getWeekZeroSelectionKey(pick.team, pick.choice);
+  }
+  return normalizeTeamName(pick?.team);
+}
+
+function normalizeSelectedLockForWeek(week, lockValue, selections) {
+  if (!lockValue) {
+    return null;
+  }
+
+  if (!isWeekZero(week)) {
+    const normalizedLock = normalizeTeamName(lockValue);
+    return selections.includes(normalizedLock) ? normalizedLock : null;
+  }
+
+  if (selections.includes(lockValue)) {
+    return lockValue;
+  }
+
+  const normalizedLockTeam = normalizeTeamName(lockValue);
+  const inferred = selections.find((selectionKey) => {
+    const parsed = parseWeekZeroSelectionKey(selectionKey);
+    return parsed && parsed.team === normalizedLockTeam;
+  });
+  return inferred || null;
+}
+
+function getWeekZeroChoiceForTeam(team, selections = selectedTeams) {
+  const normalizedTeam = normalizeTeamName(team);
+  for (const selectionKey of selections) {
+    const parsed = parseWeekZeroSelectionKey(selectionKey);
+    if (parsed && parsed.team === normalizedTeam) {
+      return parsed.choice;
+    }
+  }
+  return null;
+}
+
+function formatLockLabel(week, lockValue) {
+  if (!lockValue) {
+    return '';
+  }
+  if (!isWeekZero(week)) {
+    return lockValue;
+  }
+
+  const parsed = parseWeekZeroSelectionKey(lockValue);
+  if (!parsed) {
+    return lockValue;
+  }
+  return `${parsed.team} ${parsed.choice.toUpperCase()}`;
+}
+
 const week1Matchups = [
-  { away: 'Patriots', home: 'Seahawks', homeLine: '-3.5', day: 'Thu', time: '1:00 PM ET' },
-  { away: '49ers', home: 'Rams', homeLine: '-2.5', day: 'Sun', time: '4:05 PM ET' },
-  { away: 'Saints', home: 'Lions', homeLine: '-7', day: 'Sun', time: '4:25 PM ET' },
-  { away: 'Bills', home: 'Texans', homeLine: '-1.5', day: 'Sun', time: '8:20 PM ET' },
-  { away: 'Ravens', home: 'Colts', homeLine: '-3.5', day: 'Sun', time: '1:00 PM ET' },
-  { away: 'Bears', home: 'Panthers', homeLine: '-2.5', day: 'Sun', time: '1:00 PM ET' },
-  { away: 'Buccaneers', home: 'Bengals', homeLine: '-3.5', day: 'Sun', time: '4:25 PM ET' },
-  { away: 'Falcons', home: 'Steelers', homeLine: '-3', day: 'Sun', time: '1:00 PM ET' },
-  { away: 'Jets', home: 'Titans', homeLine: '-3', day: 'Sun', time: '4:05 PM ET' },
-  { away: 'Browns', home: 'Jaguars', homeLine: '-7', day: 'Sun', time: '1:00 PM ET' },
-  { away: 'Commanders', home: 'Eagles', homeLine: '-5.5', day: 'Sun', time: '4:25 PM ET' },
-  { away: 'Cardinals', home: 'Chargers', homeLine: '-11.5', day: 'Sun', time: '4:05 PM ET' },
-  { away: 'Dolphins', home: 'Raiders', homeLine: '-3', day: 'Sun', time: '4:25 PM ET' },
-  { away: 'Packers', home: 'Vikings', homeLine: '-1.5', day: 'Mon', time: '8:15 PM ET' },
-  { away: 'Cowboys', home: 'Giants', homeLine: '-2.5', day: 'Sun', time: '4:25 PM ET' },
-  { away: 'Broncos', home: 'Chiefs', homeLine: '-2.5', day: 'Sun', time: '8:20 PM ET' }
+  { away: 'New England Patriots', home: 'Seattle Seahawks', homeLine: '-3.5', day: 'Wed', date: '9/9', time: '7:20 PM CT', notes: 'Wednesday Night Kickoff' },
+  { away: 'San Francisco 49ers', home: 'Los Angeles Rams', homeLine: '-3.5', day: 'Thu', date: '9/10', time: '7:35 PM CT', notes: 'Game in Melbourne, AUS' },
+  { away: 'Cleveland Browns', home: 'Jacksonville Jaguars', homeLine: '-8', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Tampa Bay Buccaneers', home: 'Cincinnati Bengals', homeLine: '-3.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Baltimore Ravens', home: 'Indianapolis Colts', homeLine: '+3.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Atlanta Falcons', home: 'Pittsburgh Steelers', homeLine: '-3.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Buffalo Bills', home: 'Houston Texans', homeLine: '+0.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Chicago Bears', home: 'Carolina Panthers', homeLine: '-2.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'New York Jets', home: 'Tennessee Titans', homeLine: '-2.5', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'New Orleans Saints', home: 'Detroit Lions', homeLine: '-7', day: 'Sun', date: '9/13', time: '12:00 PM CT' },
+  { away: 'Arizona Cardinals', home: 'Los Angeles Chargers', homeLine: '-10.5', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
+  { away: 'Miami Dolphins', home: 'Las Vegas Raiders', homeLine: '-3.5', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
+  { away: 'Washington Commanders', home: 'Philadelphia Eagles', homeLine: '-4.5', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
+  { away: 'Green Bay Packers', home: 'Minnesota Vikings', homeLine: '-1', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
+  { away: 'Dallas Cowboys', home: 'New York Giants', homeLine: '-2.5', day: 'Sun', date: '9/13', time: '7:20 PM CT' },
+  { away: 'Denver Broncos', home: 'Kansas City Chiefs', homeLine: 'OFF', day: 'Mon', date: '9/14', time: '7:15 PM CT', notes: 'Waiting on Mahomes Status' }
 ];
 
 function formatSpread(value) {
@@ -238,6 +358,9 @@ function formatSpread(value) {
 }
 
 function invertLine(line) {
+  if (line === 'OFF') {
+    return 'OFF';
+  }
   return line.startsWith('-') ? `+${line.slice(1)}` : `-${line.replace('+', '')}`;
 }
 
@@ -269,15 +392,129 @@ function startLiveClock() {
 }
 
 function getMatchupSortValue(matchup) {
-  const dayOrder = { Mon: 7, Tue: 6, Wed: 3, Thu: 4, Fri: 5, Sat: 2, Sun: 1 };
+  const dayOrder = { Wed: 1, Thu: 2, Fri: 3, Sat: 4, Sun: 5, Mon: 6, Tue: 7 };
   const dayValue = dayOrder[matchup.day] ?? 99;
-  const timeValue = matchup.time || '00:00 PM ET';
+  const timeValue = matchup.time || '00:00 PM CT';
   const numericTime = Number(timeValue.replace(/[^\d]/g, '').slice(0, 4)) || 0;
   return [dayValue, numericTime, timeValue];
 }
 
+function parseClockTime(timeLabel) {
+  const match = String(timeLabel || '').match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+  if (!match) {
+    return null;
+  }
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] || 0);
+  const meridiem = match[3].toUpperCase();
+
+  if (meridiem === 'PM' && hours < 12) {
+    hours += 12;
+  }
+  if (meridiem === 'AM' && hours === 12) {
+    hours = 0;
+  }
+
+  return { hours, minutes };
+}
+
+function getTimeZoneOffsetMinutes(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  const parts = formatter.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+
+  return (asUtc - date.getTime()) / 60000;
+}
+
+function createDateFromTimeZoneWallClock(year, month, day, hour, minute, timeZone) {
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const offsetMinutes = getTimeZoneOffsetMinutes(utcGuess, timeZone);
+  return new Date(utcGuess.getTime() - offsetMinutes * 60000);
+}
+
+function getMatchupDateLabel(matchup, week) {
+  if (matchup?.date) {
+    return matchup.date;
+  }
+
+  const kickoff = getMatchupKickoffDate(matchup, week);
+  const month = kickoff.getMonth() + 1;
+  const day = kickoff.getDate();
+  return `${month}/${day}`;
+}
+
+function getLocalKickoffLabel(matchup, week) {
+  if (!matchup?.time || matchup.time === 'TBD') {
+    const fallbackDate = getMatchupDateLabel(matchup, week);
+    return `${matchup.day || 'TBD'} ${fallbackDate} • Time TBD`;
+  }
+
+  const parsedTime = parseClockTime(matchup.time);
+  if (!parsedTime) {
+    const fallbackDate = getMatchupDateLabel(matchup, week);
+    return `${matchup.day || 'TBD'} ${fallbackDate} • ${matchup.time}`;
+  }
+
+  const dateLabel = getMatchupDateLabel(matchup, week);
+  const [monthString, dayString] = String(dateLabel).split('/');
+  const month = Number(monthString);
+  const day = Number(dayString);
+  const year = new Date().getFullYear();
+
+  if (!Number.isFinite(month) || !Number.isFinite(day)) {
+    return `${matchup.day || 'TBD'} ${dateLabel} • ${matchup.time}`;
+  }
+
+  const kickoffInstant = createDateFromTimeZoneWallClock(
+    year,
+    month,
+    day,
+    parsedTime.hours,
+    parsedTime.minutes,
+    'America/Chicago'
+  );
+
+  const localDate = new Intl.DateTimeFormat(undefined, {
+    month: 'numeric',
+    day: 'numeric'
+  }).format(kickoffInstant);
+
+  const localTime = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  }).format(kickoffInstant);
+
+  return `${matchup.day || 'TBD'} ${localDate} • ${localTime}`;
+}
+
 function getCurrentContestWeek(date = new Date()) {
-  return 2;
+  return 1;
 }
 
 function loadPicks() {
@@ -395,6 +632,7 @@ function loadStandingsUsers() {
 
   return [
     {
+      email: currentUserEmail,
       name: getDisplayName(currentUserEmail),
       picks: myPicks,
       superLocks: superLocks
@@ -422,6 +660,87 @@ function saveStandingsUsers(users) {
   localStorage.setItem('super7-standings-users', JSON.stringify(users));
 }
 
+function pruneStandingsProfilesToOwner(keepEmail = COMMISSIONER_EMAIL) {
+  const keepEmailNormalized = (keepEmail || '').trim().toLowerCase();
+  if (!keepEmailNormalized) {
+    return;
+  }
+
+  const standingsUsers = loadStandingsUsers();
+  const ownerDisplayName = getDisplayName(keepEmail).trim();
+  const ownerDisplayNameNormalized = ownerDisplayName.toLowerCase();
+
+  const matchingProfiles = standingsUsers.filter((user) => {
+    const userEmailNormalized = (user.email || '').trim().toLowerCase();
+    const userNameNormalized = (user.name || '').trim().toLowerCase();
+    return userEmailNormalized === keepEmailNormalized
+      || userNameNormalized === keepEmailNormalized
+      || userNameNormalized === ownerDisplayNameNormalized;
+  });
+
+  const sourceProfile = matchingProfiles[0] || {};
+  const isOwnerSession = (currentUserEmail || '').trim().toLowerCase() === keepEmailNormalized;
+  const ownerRecord = {
+    ...sourceProfile,
+    email: keepEmail,
+    name: ownerDisplayName || keepEmail,
+    picks: isOwnerSession ? myPicks : (Array.isArray(sourceProfile.picks) ? sourceProfile.picks : []),
+    superLocks: isOwnerSession ? superLocks : (sourceProfile.superLocks || {}),
+    paid: Boolean(sourceProfile.paid)
+  };
+
+  saveStandingsUsers([ownerRecord]);
+}
+
+function syncCurrentUserStandingsRow() {
+  const standingsUsers = loadStandingsUsers();
+  const currentUserName = getCurrentUserDisplayLabel();
+  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
+  const currentUserNameNormalized = (currentUserName || '').trim().toLowerCase();
+  const livePicksJson = JSON.stringify(myPicks);
+  const liveSuperLocksJson = JSON.stringify(superLocks);
+
+  const matchingIndices = standingsUsers
+    .map((user, index) => {
+      const userNameNormalized = (user.name || '').trim().toLowerCase();
+      const userEmailNormalized = (user.email || '').trim().toLowerCase();
+      const userPicksJson = JSON.stringify(Array.isArray(user.picks) ? user.picks : []);
+      const userSuperLocksJson = JSON.stringify(user.superLocks || {});
+      const matchesIdentity = userEmailNormalized === currentUserEmailNormalized || userNameNormalized === currentUserNameNormalized;
+      const matchesLiveState = userPicksJson === livePicksJson && userSuperLocksJson === liveSuperLocksJson;
+      return matchesIdentity || matchesLiveState ? index : -1;
+    })
+    .filter((index) => index >= 0);
+
+  const currentUserIndex = matchingIndices[0] ?? -1;
+
+  const currentUserRecord = {
+    email: currentUserEmail,
+    name: currentUserName,
+    picks: myPicks,
+    superLocks: superLocks,
+    paid: Boolean(currentUserIndex >= 0 ? standingsUsers[currentUserIndex].paid : false)
+  };
+
+  const updatedStandingsUsers = standingsUsers.filter((_, index) => !matchingIndices.includes(index));
+  updatedStandingsUsers.unshift(currentUserRecord);
+  saveStandingsUsers(updatedStandingsUsers);
+}
+
+function setPaidStatusForStandingsUser(userName, isPaid) {
+  const standingsUsers = loadStandingsUsers();
+  const userIndex = standingsUsers.findIndex((user) => user.name === userName);
+  if (userIndex < 0) {
+    return;
+  }
+
+  standingsUsers[userIndex] = {
+    ...standingsUsers[userIndex],
+    paid: Boolean(isPaid)
+  };
+  saveStandingsUsers(standingsUsers);
+}
+
 function getCurrentUserDisplayLabel() {
   return getDisplayName(currentUserEmail);
 }
@@ -443,9 +762,9 @@ function getSuperLockForWeek(week) {
 
 function getLatestSavedWeek() {
   if (!myPicks.length) {
-    return 1;
+    return 0;
   }
-  return myPicks.reduce((latest, pick) => Math.max(latest, pick.week), 1);
+  return myPicks.reduce((latest, pick) => Math.max(latest, pick.week), 0);
 }
 
 function hasSavedPicksForCurrentWeek() {
@@ -494,7 +813,7 @@ function canEditMatchup(matchup, week) {
 
 function canEditPicksForWeek(week, email = currentUserEmail, playerId = 'me') {
   const weekNumber = Number(week);
-  if (!Number.isFinite(weekNumber) || weekNumber < 1 || weekNumber > 18) {
+  if (!Number.isFinite(weekNumber) || weekNumber < 0 || weekNumber > 18) {
     return false;
   }
 
@@ -506,12 +825,20 @@ function canEditPicksForWeek(week, email = currentUserEmail, playerId = 'me') {
 }
 
 function getMatchupForPick(pick) {
-  const week = contests.super7.weeks[pick.week - 1];
-  return week?.matchups.find(
+  const weekData = getWeekData(pick.week);
+  if (!weekData) {
+    return null;
+  }
+
+  if (isWeekZero(pick.week)) {
+    return weekData.winTotals?.find((entry) => normalizeTeamName(entry.team) === normalizeTeamName(pick.team)) || null;
+  }
+
+  return weekData.matchups?.find(
     (matchup) =>
       (matchup.home === pick.home && matchup.away === pick.away) ||
       (matchup.home === pick.away && matchup.away === pick.home)
-  );
+  ) || null;
 }
 
 function generateActualScore(week, matchup) {
@@ -523,6 +850,17 @@ function generateActualScore(week, matchup) {
 }
 
 function getPickOutcome(pick, matchup) {
+  if (isWeekZero(pick?.week)) {
+    return {
+      awayScore: null,
+      homeScore: null,
+      score: '',
+      correct: false,
+      push: false,
+      hasResult: false
+    };
+  }
+
   if (!matchup) {
     return {
       awayScore: null,
@@ -564,10 +902,28 @@ function getPickOutcome(pick, matchup) {
 }
 
 function getStandingsRows() {
-  const standingsUsers = loadStandingsUsers();
+  const currentUserName = getCurrentUserDisplayLabel();
+  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
+  const currentUserNameNormalized = (currentUserName || '').trim().toLowerCase();
+  const standingsUsers = loadStandingsUsers().map((user) => {
+    const userNameNormalized = (user.name || '').trim().toLowerCase();
+    if (userNameNormalized !== currentUserNameNormalized && userNameNormalized !== currentUserEmailNormalized) {
+      return user;
+    }
+
+    return {
+      ...user,
+      picks: myPicks,
+      superLocks: superLocks
+    };
+  });
+  const currentWeek = getCurrentContestWeek();
   const standings = standingsUsers.map((user) => {
     const userPicks = Array.isArray(user.picks) ? user.picks : [];
     const userSuperLocks = user.superLocks || {};
+    const currentWeekPicks = userPicks.filter((pick) => Number(pick.week) === Number(currentWeek));
+    const hasWeeklyPicksMade = currentWeekPicks.length >= 7 && Boolean(userSuperLocks[currentWeek]);
+    const isPaid = Boolean(user.paid);
     let correct = 0;
     let pushes = 0;
     let incorrect = 0;
@@ -583,6 +939,9 @@ function getStandingsRows() {
       }
 
       const outcome = getPickOutcome(pick, matchup);
+      if (!outcome.hasResult) {
+        return;
+      }
       const isSuperLock = userSuperLocks[pick.week] === pick.team;
       const pickPoints = outcome.push ? 0.5 : outcome.correct ? 1 : 0;
       const totalPoints = isSuperLock ? pickPoints * 2 : pickPoints;
@@ -612,6 +971,13 @@ function getStandingsRows() {
       correct,
       pushes,
       incorrect,
+      isPaid,
+      paidStatus: isPaid
+        ? '<span class="result-mark correct" title="Paid">✅</span>'
+        : '<span class="result-mark incorrect" title="Not paid">❌</span>',
+      weeklyPicksMade: hasWeeklyPicksMade
+        ? '<span class="result-mark correct" title="Weekly picks made">✅</span>'
+        : '<span class="result-mark incorrect" title="Weekly picks not complete">❌</span>',
       pickRecord: `${correct} - ${incorrect} - ${pushes}`,
       superLockRecord: `${superLockCorrect} - ${superLockIncorrect} - ${superLockPushes}`
     };
@@ -638,7 +1004,21 @@ function formatSelection(matchups, selectedTeam) {
 }
 
 function normalizeSelectedTeamsForWeek(week, teams) {
-  const matchups = contests.super7.weeks[week - 1]?.matchups || [];
+  if (isWeekZero(week)) {
+    const latestSelectionByTeam = new Map();
+
+    teams.forEach((selectionKey) => {
+      const parsed = parseWeekZeroSelectionKey(selectionKey);
+      if (!parsed) {
+        return;
+      }
+      latestSelectionByTeam.set(parsed.team, getWeekZeroSelectionKey(parsed.team, parsed.choice));
+    });
+
+    return Array.from(latestSelectionByTeam.values());
+  }
+
+  const matchups = getWeekData(week)?.matchups || [];
   const cleaned = [];
   const matchupIndexByKey = new Map();
 
@@ -665,16 +1045,21 @@ function normalizeSelectedTeamsForWeek(week, teams) {
 }
 
 function getMatchupForKey(week, matchupKey) {
-  const matchups = contests.super7.weeks[week - 1]?.matchups || [];
+  const matchups = getWeekData(week)?.matchups || [];
   return matchups.find((matchup) => getMatchupKey(matchup) === matchupKey);
 }
 
 function updatePickedTeam(week, matchupIdentifier, team) {
   const matchup = typeof matchupIdentifier === 'string'
     ? getMatchupForKey(week, matchupIdentifier)
-    : contests.super7.weeks[week - 1].matchups[matchupIdentifier];
+    : getWeekData(week)?.matchups?.[matchupIdentifier];
 
   if (!matchup) {
+    return;
+  }
+
+  if (matchup.homeLine === 'OFF') {
+    showMessage('This game is OFF and cannot be selected yet.');
     return;
   }
 
@@ -704,9 +1089,60 @@ function updatePickedTeam(week, matchupIdentifier, team) {
   }
 }
 
+function updateWeekZeroPickedTeam(week, team, choice) {
+  const normalizedTeam = normalizeTeamName(team);
+  const selectionKey = getWeekZeroSelectionKey(normalizedTeam, choice);
+  selectedTeams = normalizeSelectedTeamsForWeek(week, selectedTeams);
+
+  const existingSelectionKey = selectedTeams.find((item) => {
+    const parsed = parseWeekZeroSelectionKey(item);
+    return parsed && parsed.team === normalizedTeam;
+  });
+
+  if (existingSelectionKey === selectionKey) {
+    selectedTeams = selectedTeams.filter((item) => item !== selectionKey);
+    if (selectedLock && !selectedTeams.includes(selectedLock)) {
+      selectedLock = null;
+    }
+    return;
+  }
+
+  if (!existingSelectionKey && selectedTeams.length >= 7) {
+    showMessage('You must select exactly 7 games before saving.');
+    return;
+  }
+
+  selectedTeams = selectedTeams.filter((item) => {
+    const parsed = parseWeekZeroSelectionKey(item);
+    return !(parsed && parsed.team === normalizedTeam);
+  });
+
+  selectedTeams.push(selectionKey);
+  if (selectedLock && !selectedTeams.includes(selectedLock)) {
+    selectedLock = null;
+  }
+}
+
 function saveWeekPicks(playerName = null) {
   selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, selectedTeams);
-  const weekMatchups = contests.super7.weeks[selectedWeek - 1].matchups;
+  const weekData = getWeekData(selectedWeek);
+  if (!weekData) {
+    showMessage('Unable to save picks for this week.');
+    return false;
+  }
+
+  if (!isWeekZero(selectedWeek)) {
+    const offTeams = new Set(
+      (weekData.matchups || [])
+        .filter((matchup) => matchup.homeLine === 'OFF')
+        .flatMap((matchup) => [normalizeTeamName(matchup.away), normalizeTeamName(matchup.home)])
+    );
+    selectedTeams = selectedTeams.filter((team) => !offTeams.has(normalizeTeamName(team)));
+    if (selectedLock && offTeams.has(normalizeTeamName(selectedLock))) {
+      selectedLock = null;
+    }
+  }
+
   if (selectedTeams.length !== 7) {
     showMessage('You must select exactly 7 games before saving.');
     return false;
@@ -721,24 +1157,50 @@ function saveWeekPicks(playerName = null) {
     selectedLock = null;
   }
 
-  const picksForWeek = selectedTeams.map((team) => {
-    const matchup = weekMatchups.find((m) => m.away === team || m.home === team);
-    const line = team === matchup.home ? matchup.homeLine : invertLine(matchup.homeLine);
-    const outcome = getPickOutcome({ week: selectedWeek, team, home: matchup.home, away: matchup.away }, matchup);
-    return {
-      week: selectedWeek,
-      away: matchup.away,
-      home: matchup.home,
-      team,
-      line,
-      matchup: `${matchup.away} @ ${matchup.home}`,
-      awayScore: outcome.awayScore,
-      homeScore: outcome.homeScore,
-      score: outcome.score,
-      correct: outcome.correct,
-      push: outcome.push
-    };
-  });
+  const picksForWeek = isWeekZero(selectedWeek)
+    ? selectedTeams
+      .map((selectionKey) => {
+        const parsed = parseWeekZeroSelectionKey(selectionKey);
+        if (!parsed) {
+          return null;
+        }
+        const teamEntry = weekData.winTotals?.find((entry) => normalizeTeamName(entry.team) === parsed.team);
+        if (!teamEntry) {
+          return null;
+        }
+
+        return {
+          week: selectedWeek,
+          team: parsed.team,
+          choice: parsed.choice,
+          line: String(teamEntry.winTotal),
+          matchup: `${parsed.team} Win Total ${teamEntry.winTotal}`,
+          awayScore: null,
+          homeScore: null,
+          score: '',
+          correct: false,
+          push: false
+        };
+      })
+      .filter(Boolean)
+    : selectedTeams.map((team) => {
+      const matchup = weekData.matchups.find((m) => m.away === team || m.home === team);
+      const line = team === matchup.home ? matchup.homeLine : invertLine(matchup.homeLine);
+      const outcome = getPickOutcome({ week: selectedWeek, team, home: matchup.home, away: matchup.away }, matchup);
+      return {
+        week: selectedWeek,
+        away: matchup.away,
+        home: matchup.home,
+        team,
+        line,
+        matchup: `${matchup.away} @ ${matchup.home}`,
+        awayScore: outcome.awayScore,
+        homeScore: outcome.homeScore,
+        score: outcome.score,
+        correct: outcome.correct,
+        push: outcome.push
+      };
+    });
 
   const targetName = playerName || getCurrentUserDisplayLabel();
   if (playerName && playerName !== getCurrentUserDisplayLabel()) {
@@ -764,6 +1226,7 @@ function saveWeekPicks(playerName = null) {
 
   myPicks = myPicks.filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
   savePicks();
+  syncCurrentUserStandingsRow();
 
   if (selectedLock) {
     superLocks[selectedWeek] = selectedLock;
@@ -771,6 +1234,7 @@ function saveWeekPicks(playerName = null) {
     delete superLocks[selectedWeek];
   }
   saveSuperLocks();
+  syncCurrentUserStandingsRow();
 
   showMessage(`Saved ${selectedTeams.length} picks for Week ${selectedWeek}.`);
   return true;
@@ -782,7 +1246,7 @@ function generateWeekMatchups(week) {
   }
 
   const adjustment = ((week - 1) % 7 - 3) * 0.5;
-  const matchupTimes = ['1:00 PM ET', '4:05 PM ET', '4:25 PM ET', '8:20 PM ET'];
+  const matchupTimes = ['1:00 PM CT', '4:05 PM CT', '4:25 PM CT', '8:20 PM CT'];
   const matchupDays = ['Sun', 'Sun', 'Sun', 'Mon'];
   return Array.from({ length: 16 }, (_, index) => {
     const away = nflBaseSpreads[index * 2];
@@ -801,11 +1265,17 @@ const contests = {
   super7: {
     id: 'super7',
     name: 'Super 7',
-    description: 'Pick seven NFL teams against the spread for each week, from Week 1 through Week 18.',
-    weeks: Array.from({ length: 18 }, (_, index) => ({
-      week: index + 1,
-      matchups: generateWeekMatchups(index + 1)
-    }))
+    description: 'Pick seven teams each week. Week 0 uses season win totals (over/under), and Weeks 1-18 use game spreads.',
+    weeks: [
+      {
+        week: 0,
+        winTotals: weekZeroWinTotals.map((entry) => ({ ...entry }))
+      },
+      ...Array.from({ length: 18 }, (_, index) => ({
+        week: index + 1,
+        matchups: generateWeekMatchups(index + 1)
+      }))
+    ]
   }
 };
 
@@ -964,6 +1434,8 @@ function renderMyInfoPage() {
       }
 
       saveDisplayName(nameInput.value, currentUserEmail);
+      syncCurrentUserStandingsRow();
+      updateLoggedInUserDisplay();
       showMessage('Display name updated.');
       renderMyInfoPage();
     });
@@ -1038,8 +1510,8 @@ function renderSuper7Contest() {
     return list;
   })();
 
-  const allAvailableWeeks = Array.from({ length: currentWeek }, (_, index) => index + 1).reverse();
-  if (!Number.isFinite(selectedWeek) || selectedWeek < 1 || selectedWeek > currentWeek) {
+  const allAvailableWeeks = Array.from({ length: 19 }, (_, index) => index);
+  if (!Number.isFinite(selectedWeek) || selectedWeek < 0 || selectedWeek > 18) {
     selectedWeek = currentWeek;
   }
   const activePlayer = players.find((player) => player.id === currentEditingPlayerName || player.label === currentEditingPlayerName) || players[0];
@@ -1047,7 +1519,8 @@ function renderSuper7Contest() {
   selectedWeek = activeWeek;
   const selectedPlayerId = activePlayer.id;
 
-  const weekData = activeWeek ? contest.weeks[activeWeek - 1] : null;
+  const weekData = getWeekData(activeWeek);
+  const isWeekZeroMode = isWeekZero(activeWeek);
   const isEditableWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id);
   pageTitle.textContent = contest.name;
   pageText.textContent = contest.description;
@@ -1083,38 +1556,70 @@ function renderSuper7Contest() {
       <div class="contest-card-header">
         <h2>${contest.name}</h2>
       </div>
-      ${activeWeek ? `
+      ${weekData ? `
         <div class="contest-summary">
           <p>${isEditableWeek ? `Select games for week ${activeWeek}.` : `Week ${activeWeek} is locked for editing.`}</p>
-          <p>${selectedTeams.length} game${selectedTeams.length === 1 ? '' : 's'} selected${selectedLock ? ', 1 super lock selected' : ', 0 super locks selected'}</p>
+          <p>${selectedTeams.length} game${selectedTeams.length === 1 ? '' : 's'} selected${selectedLock ? `, super lock: ${formatLockLabel(activeWeek, selectedLock)}` : ', 0 super locks selected'}</p>
         </div>
-        <div class="matchup-grid">
-          ${sortedMatchups.map((matchup) => {
-            const awayLine = invertLine(matchup.homeLine);
-            const awaySelected = selectedTeams.includes(normalizeTeamName(matchup.away));
-            const homeSelected = selectedTeams.includes(normalizeTeamName(matchup.home));
-            const matchupKey = getMatchupKey(matchup);
-            const matchupDay = matchup.day || 'TBD';
-            const matchupTime = matchup.time || 'Time TBD';
-            return `
-              <div class="matchup-row">
-                <div class="matchup-pick-row">
-                  <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.away)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}">${matchup.away} ${awayLine}</button>
-                  ${awaySelected ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.away) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.away)}" aria-label="${selectedLock === normalizeTeamName(matchup.away) ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === normalizeTeamName(matchup.away) ? '🔒' : '🔓'}</button>` : ''}
+        ${isWeekZeroMode ? `
+          <div class="week-zero-grid">
+            ${(weekData?.winTotals || []).map((entry) => {
+              const normalizedTeam = normalizeTeamName(entry.team);
+              const underKey = getWeekZeroSelectionKey(normalizedTeam, 'under');
+              const overKey = getWeekZeroSelectionKey(normalizedTeam, 'over');
+              const selectedChoice = getWeekZeroChoiceForTeam(normalizedTeam);
+              const underSelected = selectedChoice === 'under';
+              const overSelected = selectedChoice === 'over';
+              const selectedKey = underSelected ? underKey : overSelected ? overKey : null;
+              return `
+                <div class="week-zero-row">
+                  <div class="week-zero-side week-zero-side-under">
+                    <button type="button" class="select-team-button week-zero-under${underSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="under">Under</button>
+                    ${underSelected ? `<button type="button" class="super-lock-toggle week-zero-lock-toggle${selectedLock === underKey ? ' active' : ''}" data-selection-key="${underKey}" aria-label="${selectedLock === underKey ? 'Remove Super Lock from' : 'Set Super Lock on'} ${entry.team} under">${selectedLock === underKey ? '🔒' : '🔓'}</button>` : ''}
+                  </div>
+                  <div class="week-zero-team-line">
+                    <strong>${entry.team}</strong>
+                    <span>${entry.winTotal} wins</span>
+                  </div>
+                  <div class="week-zero-side week-zero-side-over">
+                    <button type="button" class="select-team-button week-zero-over${overSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="over">Over</button>
+                    ${overSelected ? `<button type="button" class="super-lock-toggle week-zero-lock-toggle${selectedLock === overKey ? ' active' : ''}" data-selection-key="${overKey}" aria-label="${selectedLock === overKey ? 'Remove Super Lock from' : 'Set Super Lock on'} ${entry.team} over">${selectedLock === overKey ? '🔒' : '🔓'}</button>` : ''}
+                  </div>
                 </div>
-                <span class="matchup-vs">@</span>
-                <div class="matchup-pick-row">
-                  <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.home)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}">${matchup.home} ${matchup.homeLine}</button>
-                  ${homeSelected ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.home) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.home)}" aria-label="${selectedLock === normalizeTeamName(matchup.home) ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === normalizeTeamName(matchup.home) ? '🔒' : '🔓'}</button>` : ''}
+              `;
+            }).join('')}
+          </div>
+        ` : `
+          <div class="matchup-grid">
+            ${sortedMatchups.map((matchup) => {
+              const awayLine = invertLine(matchup.homeLine);
+              const isOffLine = matchup.homeLine === 'OFF';
+              const awaySelected = selectedTeams.includes(normalizeTeamName(matchup.away));
+              const homeSelected = selectedTeams.includes(normalizeTeamName(matchup.home));
+              const matchupKey = getMatchupKey(matchup);
+              const matchupKickoffLabel = getLocalKickoffLabel(matchup, activeWeek);
+              const matchupNotes = matchup.notes || '';
+              return `
+                <div class="matchup-row">
+                  <div class="matchup-pick-row">
+                    <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.away)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${isOffLine ? 'disabled' : ''}>${matchup.away} ${awayLine}</button>
+                    ${awaySelected && !isOffLine ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.away) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.away)}" aria-label="${selectedLock === normalizeTeamName(matchup.away) ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === normalizeTeamName(matchup.away) ? '🔒' : '🔓'}</button>` : ''}
+                  </div>
+                  <span class="matchup-vs">@</span>
+                  <div class="matchup-pick-row">
+                    <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.home)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${isOffLine ? 'disabled' : ''}>${matchup.home} ${matchup.homeLine}</button>
+                    ${homeSelected && !isOffLine ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.home) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.home)}" aria-label="${selectedLock === normalizeTeamName(matchup.home) ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === normalizeTeamName(matchup.home) ? '🔒' : '🔓'}</button>` : ''}
+                  </div>
+                  <div class="matchup-time">${matchupKickoffLabel}</div>
+                  ${matchupNotes ? `<div class="matchup-note">${matchupNotes}</div>` : ''}
                 </div>
-                <div class="matchup-time">${matchupDay} • ${matchupTime}</div>
-              </div>
-            `;
-          }).join('')}
-        </div>
+              `;
+            }).join('')}
+          </div>
+        `}
         ${isEditableWeek ? `
           <div class="selection-summary">
-            ${selectedTeams.length ? `<p class="help-text">${selectedLock ? `Super Lock: ${selectedLock}` : 'Tap the padlock next to a selected team to mark it as your Super Lock.'}</p>` : '<p class="help-text">No teams selected yet.</p>'}
+            ${selectedTeams.length ? `<p class="help-text">${selectedLock ? `Super Lock: ${formatLockLabel(activeWeek, selectedLock)}` : 'Tap the padlock next to a selected pick to mark it as your Super Lock.'}</p>` : '<p class="help-text">No teams selected yet.</p>'}
           </div>
           <div class="button-row">
             <button type="button" class="secondary-button" id="save-week-picks">Save picks</button>
@@ -1132,8 +1637,8 @@ function renderSuper7Contest() {
       selectedWeek = Number(weekFilter.value);
       const player = players.find((entry) => entry.id === (currentEditingPlayerName || 'me')) || players[0];
       currentEditingPlayerName = player.label;
-      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => pick.team));
-      selectedLock = player.superLocks?.[selectedWeek] || null;
+      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => getPickSelectionKey(pick)));
+      selectedLock = normalizeSelectedLockForWeek(selectedWeek, player.superLocks?.[selectedWeek] || null, selectedTeams);
       renderSuper7Contest();
     });
   }
@@ -1145,8 +1650,8 @@ function renderSuper7Contest() {
       const player = players.find((entry) => entry.id === chosenPlayerId) || players[0];
       currentEditingPlayerName = chosenPlayerId === 'me' ? null : player.label;
       selectedWeek = Number(weekFilter?.value || selectedWeek || currentWeek);
-      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => pick.team));
-      selectedLock = player.superLocks?.[selectedWeek] || null;
+      selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => getPickSelectionKey(pick)));
+      selectedLock = normalizeSelectedLockForWeek(selectedWeek, player.superLocks?.[selectedWeek] || null, selectedTeams);
       renderSuper7Contest();
     });
   }
@@ -1160,8 +1665,13 @@ function renderSuper7Contest() {
         return;
       }
       const team = button.dataset.team;
-      const matchupKey = button.dataset.matchupKey;
-      updatePickedTeam(selectedWeek, matchupKey, team);
+      const choice = button.dataset.choice;
+      if (isWeekZeroMode && choice) {
+        updateWeekZeroPickedTeam(selectedWeek, team, choice);
+      } else {
+        const matchupKey = button.dataset.matchupKey;
+        updatePickedTeam(selectedWeek, matchupKey, team);
+      }
       renderSuper7Contest();
     });
   });
@@ -1189,8 +1699,8 @@ function renderSuper7Contest() {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
         return;
       }
-      const team = button.dataset.team;
-      selectedLock = selectedLock === team ? null : team;
+      const lockValue = button.dataset.selectionKey || button.dataset.team;
+      selectedLock = selectedLock === lockValue ? null : lockValue;
       renderSuper7Contest();
     });
   });
@@ -1256,6 +1766,7 @@ function renderNewsPage() {
   pageText.textContent = 'Current contest standings for all players.';
 
   const standings = getStandingsRows();
+  const isCommissioner = isCurrentUserCommissioner();
   pageBody.innerHTML = `
     <div class="contest-card">
       <div class="contest-card-header">
@@ -1269,6 +1780,8 @@ function renderNewsPage() {
             <th>Points</th>
             <th>Pick Record</th>
             <th>Super Lock Record</th>
+            <th>Paid</th>
+            <th>Weekly Picks Made</th>
           </tr>
         </thead>
         <tbody>
@@ -1278,21 +1791,43 @@ function renderNewsPage() {
               <td>${row.points}</td>
               <td>${row.pickRecord}</td>
               <td>${row.superLockRecord}</td>
+              <td>
+                ${isCommissioner
+                  ? `<button type="button" class="paid-toggle-button result-mark ${row.isPaid ? 'correct' : 'incorrect'}" data-user-name="${row.name}" aria-label="Toggle paid status for ${row.name}">${row.isPaid ? '✅' : '❌'}</button>`
+                  : row.paidStatus}
+              </td>
+              <td>${row.weeklyPicksMade}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
   `;
+
+  if (isCommissioner) {
+    pageBody.querySelectorAll('.paid-toggle-button').forEach((button) => {
+      button.addEventListener('click', function () {
+        const userName = button.dataset.userName;
+        const standingsUsers = loadStandingsUsers();
+        const user = standingsUsers.find((entry) => entry.name === userName);
+        if (!user) {
+          return;
+        }
+
+        setPaidStatusForStandingsUser(userName, !user.paid);
+        renderNewsPage();
+      });
+    });
+  }
 }
 
-function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 2) {
+function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
   pageTitle.textContent = 'My Picks';
   pageText.textContent = 'Your saved Super 7 selections.';
   updateSiteStatusBar();
 
-  const currentWeek = 2;
-  const visibleWeeks = Array.from({ length: currentWeek }, (_, index) => index + 1).reverse();
+  const currentWeek = getCurrentContestWeek();
+  const visibleWeeks = Array.from({ length: 19 }, (_, index) => index);
   const currentUserLabel = getCurrentUserDisplayLabel();
   const players = (() => {
     const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
@@ -1367,17 +1902,22 @@ function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 2) {
                   const matchup = getMatchupForPick(pick);
                   const outcome = getPickOutcome(pick, matchup);
                   const opponent = pick.team === pick.home ? pick.away : pick.home;
-                  const pickText = pick.team === pick.home
-                    ? `${opponent} @ <strong class="pick-choice">${pick.team} ${pick.line}</strong>`
-                    : `<strong class="pick-choice">${pick.team} ${pick.line}</strong> @ ${opponent}`;
-                  const lockText = lock === pick.team ? ' <span class="pick-lock-label">(Super Lock)</span>' : '';
+                  const isWeekZeroPick = isWeekZero(pick.week);
+                  const selectionKey = getPickSelectionKey(pick);
+                  const isLockedPick = lock === selectionKey || (isWeekZeroPick && lock === normalizeTeamName(pick.team));
+                  const pickText = isWeekZeroPick
+                    ? `<strong class="pick-choice">${pick.team}</strong> ${pick.choice === 'under' ? 'UNDER' : 'OVER'} ${pick.line}`
+                    : (pick.team === pick.home
+                      ? `${opponent} @ <strong class="pick-choice">${pick.team} ${pick.line}</strong>`
+                      : `<strong class="pick-choice">${pick.team} ${pick.line}</strong> @ ${opponent}`);
+                  const lockText = isLockedPick ? ' <span class="pick-lock-label">(Super Lock)</span>' : '';
                   let resultMark = '';
-                  if (outcome.hasResult) {
+                  if (outcome.hasResult && !isWeekZeroPick) {
                     if (outcome.push) {
-                      resultMark = lock === pick.team
+                      resultMark = isLockedPick
                         ? '<span class="result-mark push">=</span><span class="result-mark push">=</span>'
                         : '<span class="result-mark push">=</span>';
-                    } else if (lock === pick.team) {
+                    } else if (isLockedPick) {
                       resultMark = outcome.correct
                         ? '<span class="result-mark correct">✅</span><span class="result-mark correct">✅</span>'
                         : '<span class="result-mark incorrect">❌</span><span class="result-mark incorrect">❌</span>';
@@ -1390,12 +1930,12 @@ function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 2) {
                   const pickedAbbrev = teamAbbreviations[pick.team] || pick.team;
                   const opponentAbbrev = teamAbbreviations[opponent] || opponent;
                   const spreadDisplay = `(${pick.line})`;
-                  const firstLine = outcome.hasResult
+                  const firstLine = outcome.hasResult && !isWeekZeroPick
                     ? (pick.team === pick.home
                         ? `${pickedAbbrev} ${spreadDisplay} ${outcome.homeScore}`
                         : `${pickedAbbrev} ${spreadDisplay} ${outcome.awayScore}`)
                     : '—';
-                  const secondLine = outcome.hasResult
+                  const secondLine = outcome.hasResult && !isWeekZeroPick
                     ? (pick.team === pick.home
                         ? `${opponentAbbrev} ${outcome.awayScore}`
                         : `${opponentAbbrev} ${outcome.homeScore}`)
@@ -1440,8 +1980,8 @@ function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 2) {
       }
 
       selectedWeek = week;
-      selectedTeams = normalizeSelectedTeamsForWeek(week, (activePlayer.picks || []).filter((pick) => pick.week === week).map((pick) => pick.team));
-      selectedLock = activePlayer.superLocks?.[week] || null;
+      selectedTeams = normalizeSelectedTeamsForWeek(week, (activePlayer.picks || []).filter((pick) => pick.week === week).map((pick) => getPickSelectionKey(pick)));
+      selectedLock = normalizeSelectedLockForWeek(week, activePlayer.superLocks?.[week] || null, selectedTeams);
       currentEditingPlayerName = isCurrentUserCommissioner() && !isCurrentPlayerView ? activePlayer.label : null;
       selectedContest = contests.super7.id;
       renderSuper7Contest();
@@ -1481,6 +2021,8 @@ function showProtectedPage() {
   loginCard.classList.add('hidden');
   protectedCard.classList.remove('hidden');
   updateLoggedInUserDisplay();
+  pruneStandingsProfilesToOwner();
+  syncCurrentUserStandingsRow();
 
   if (hasSavedPicksForCurrentWeek()) {
     currentPage = 'mypicks';

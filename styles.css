@@ -303,6 +303,24 @@ button:hover {
   margin-left: 0.5rem;
 }
 
+.paid-toggle-button {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.paid-toggle-button:hover {
+  background: transparent;
+}
+
+.paid-toggle-button:focus-visible {
+  outline: 2px solid rgba(165, 180, 252, 0.9);
+  outline-offset: 2px;
+}
+
 .mypicks-card {
   margin-bottom: 1rem;
 }
@@ -420,6 +438,67 @@ button:hover {
   gap: 0.75rem;
 }
 
+.week-zero-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.week-zero-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.2fr) minmax(140px, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.week-zero-side {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.week-zero-side-over {
+  direction: rtl;
+}
+
+.week-zero-side-over > * {
+  direction: ltr;
+}
+
+.week-zero-team-line {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.15rem;
+}
+
+.week-zero-team-line strong {
+  color: #f8fafc;
+}
+
+.week-zero-team-line span {
+  font-size: 0.9rem;
+  color: #a5b4fc;
+}
+
+.week-zero-under,
+.week-zero-over {
+  width: 100%;
+}
+
+.week-zero-lock-toggle {
+  margin: 0;
+}
+
+.week-zero-lock-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .matchup-row {
   display: flex;
   justify-content: center;
@@ -481,6 +560,15 @@ button:hover {
   color: #facc15;
   font-size: 0.9rem;
   font-weight: 600;
+  text-align: center;
+}
+
+.matchup-note {
+  grid-column: 1 / -1;
+  margin-top: 0.1rem;
+  color: #c7d2fe;
+  font-size: 0.88rem;
+  font-style: italic;
   text-align: center;
 }
 
@@ -611,4 +699,16 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+@media (max-width: 640px) {
+  .week-zero-row {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .week-zero-side,
+  .week-zero-side-over {
+    direction: ltr;
+  }
 }
