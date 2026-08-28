@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Page</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <section class="card" id="login-card">
+      <h1 id="form-title">Log in</h1>
+      <form id="login-form">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required />
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required />
+
+        <div class="confirm-password hidden" id="confirm-password-field">
+          <label for="confirm-password">Confirm password</label>
+          <input type="password" id="confirm-password" name="confirm-password" autocomplete="new-password" />
+        </div>
+
+        <button type="submit" id="submit-button">Log in</button>
+        <p class="message" id="form-message" role="status"></p>
+      </form>
+      <button class="secondary-button" type="button" id="toggle-form">Create an account</button>
+    </section>
+
+    <section class="card hidden" id="protected-card">
+      <div class="site-status-bar" id="site-status-bar" aria-live="polite"></div>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <button type="button" class="nav-link active" data-page="home">Home</button>
+        <button type="button" class="nav-link" data-page="contests">Contests</button>
+        <button type="button" class="nav-link" data-page="mypicks">My Picks</button>
+        <button type="button" class="nav-link" data-page="news">Standings</button>
+        <button type="button" class="nav-link" data-page="myinfo">My Info</button>
+      </nav>
+      <div class="page-content">
+        <h1 id="page-title">Home</h1>
+        <p id="page-text">This is the home page.</p>
+        <div id="page-body"></div>
+      </div>
+      <button id="logout-button">Log Out</button>
+    </section>
+  </main>
+
+  <div class="popup-overlay hidden" id="popup-overlay" role="dialog" aria-modal="true" aria-labelledby="popup-title">
+    <div class="popup-card">
+      <h2 id="popup-title">Notice</h2>
+      <p id="popup-message"></p>
+      <button type="button" class="secondary-button" id="popup-close-button">OK</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
