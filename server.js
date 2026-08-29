@@ -129,6 +129,24 @@ function normalizeStandingsUserRow(row) {
   };
 }
 
+async function ensureStandingsUser(email) {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!validEmail(normalizedEmail)) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('standings_users')
+    .upsert({
+      email: normalizedEmail,
+      display_name: normalizedEmail,
+      picks: [],
+      super_locks: {},
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'email', ignoreDuplicates: true });
+  if (error) throw error;
+}
+
 async function handleApi(request, response) {
   try {
     const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
@@ -151,6 +169,7 @@ async function handleApi(request, response) {
         });
         if (error?.code === '23505') return sendJson(response, 409, { error: 'An account with that email already exists.' });
         if (error) throw error;
+        await ensureStandingsUser(email);
       } else {
         const { data: user, error } = await supabase
           .from('users')
@@ -161,6 +180,7 @@ async function handleApi(request, response) {
         if (!user || !(await verifyPassword(password, user.password_hash))) {
           return sendJson(response, 401, { error: 'Invalid email or password.' });
         }
+        await ensureStandingsUser(email);
       }
 
       return sendJson(response, 200, { email }, { 'Set-Cookie': sessionCookie(await createSession(email)) });
@@ -181,13 +201,33 @@ async function handleApi(request, response) {
         return sendJson(response, 401, { error: 'Not signed in.' });
       }
 
-      const { data, error } = await supabase
+      const { data: standingsRows, error: standingsError } = await supabase
         .from('standings_users')
         .select('email, display_name, picks, super_locks, paid, updated_at')
         .order('updated_at', { ascending: false });
-      if (error) throw error;
+      if (standingsError) throw standingsError;
 
-      const users = (data || []).map(normalizeStandingsUserRow);
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('email')
+        .order('created_at', { ascending: true });
+      if (usersError) throw usersError;
+
+      const byEmail = new Map((standingsRows || []).map((row) => [row.email, normalizeStandingsUserRow(row)]));
+      (allUsers || []).forEach((userRow) => {
+        const email = userRow.email;
+        if (!byEmail.has(email)) {
+          byEmail.set(email, {
+            email,
+            name: email,
+            picks: [],
+            superLocks: {},
+            paid: false
+          });
+        }
+      });
+
+      const users = Array.from(byEmail.values());
       return sendJson(response, 200, { users });
     }
 
