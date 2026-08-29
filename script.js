@@ -532,12 +532,16 @@ function savePicks() {
 function clearAllSavedPicks() {
   myPicks = [];
   superLocks = {};
+  joinedContests = [];
   localStorage.removeItem('super7-picks');
   localStorage.removeItem('super7-super-locks');
+  localStorage.removeItem('super7-joined-contests');
   localStorage.removeItem('super7-standings-users');
   savePicks();
   saveSuperLocks();
+  saveJoinedContests();
   saveStandingsUsers([]);
+  syncCurrentUserStandingsRow();
 }
 
 function loadSuperLocks() {
@@ -568,6 +572,7 @@ function joinContest(contestId) {
   if (!joinedContests.includes(contestId)) {
     joinedContests.push(contestId);
     saveJoinedContests();
+    syncCurrentUserStandingsRow();
   }
 }
 
@@ -635,23 +640,9 @@ function loadStandingsUsers() {
       email: currentUserEmail,
       name: getDisplayName(currentUserEmail),
       picks: myPicks,
-      superLocks: superLocks
-    },
-    {
-      name: 'Alex',
-      picks: [
-        { week: 1, away: 'Browns', home: 'Jaguars', team: 'Jaguars', line: '-7', matchup: 'Browns @ Jaguars', awayScore: 3, homeScore: 10, correct: false, push: false },
-        { week: 1, away: 'Packers', home: 'Vikings', team: 'Packers', line: '+1.5', matchup: 'Packers @ Vikings', awayScore: 26, homeScore: 29, correct: false, push: false }
-      ],
-      superLocks: { 1: 'Packers' }
-    },
-    {
-      name: 'Jordan',
-      picks: [
-        { week: 1, away: 'Browns', home: 'Jaguars', team: 'Browns', line: '+7', matchup: 'Browns @ Jaguars', awayScore: 3, homeScore: 10, correct: true, push: false },
-        { week: 1, away: 'Packers', home: 'Vikings', team: 'Vikings', line: '-1.5', matchup: 'Packers @ Vikings', awayScore: 26, homeScore: 29, correct: false, push: true }
-      ],
-      superLocks: { 1: 'Browns' }
+      superLocks: superLocks,
+      joinedContests: joinedContests,
+      paid: false
     }
   ];
 }
@@ -693,11 +684,43 @@ async function syncCurrentUserStandingsRowToServer() {
       body: JSON.stringify({
         displayName: getCurrentUserDisplayLabel(),
         picks: myPicks,
-        superLocks: superLocks
+        superLocks: superLocks,
+        joinedContests: joinedContests
       })
     });
   } catch {
     // ignore network sync errors; local state remains usable
+  }
+}
+
+async function hydrateCurrentUserStateFromServer() {
+  if (!currentUserEmail) {
+    return false;
+  }
+
+  try {
+    const response = await fetch('/api/standings-me', { credentials: 'same-origin' });
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = await response.json();
+    const user = payload?.user;
+    if (!user) {
+      return false;
+    }
+
+    myPicks = Array.isArray(user.picks) ? user.picks : [];
+    superLocks = user.superLocks && typeof user.superLocks === 'object' ? user.superLocks : {};
+    joinedContests = Array.isArray(user.joinedContests) ? user.joinedContests : [];
+
+    savePicks();
+    saveSuperLocks();
+    saveJoinedContests();
+    saveDisplayName(user.name, currentUserEmail);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -760,6 +783,7 @@ function syncCurrentUserStandingsRow() {
     name: currentUserName,
     picks: myPicks,
     superLocks: superLocks,
+    joinedContests: joinedContests,
     paid: Boolean(currentUserIndex >= 0 ? standingsUsers[currentUserIndex].paid : false)
   };
 
@@ -799,6 +823,36 @@ async function setPaidStatusForStandingsUser(userName, isPaid) {
     paid: Boolean(isPaid)
   };
   saveStandingsUsers(standingsUsers);
+}
+
+async function saveStandingsUserPicksToServer(targetEmail, displayName, picks, superLocks) {
+  const email = typeof targetEmail === 'string' ? targetEmail.trim().toLowerCase() : '';
+  if (!email) {
+    return false;
+  }
+
+  try {
+    const response = await fetch('/api/standings-user-picks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        email,
+        displayName,
+        picks,
+        superLocks
+      })
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    await refreshStandingsUsersFromServer();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getCurrentUserDisplayLabel() {
@@ -1201,7 +1255,7 @@ function updateWeekZeroPickedTeam(week, team, choice) {
   }
 }
 
-function saveWeekPicks(playerName = null) {
+async function saveWeekPicks(playerName = null) {
   selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, selectedTeams);
   const weekData = getWeekData(selectedWeek);
   if (!weekData) {
@@ -1283,7 +1337,7 @@ function saveWeekPicks(playerName = null) {
   const targetName = playerName || getCurrentUserDisplayLabel();
   if (playerName && playerName !== getCurrentUserDisplayLabel()) {
     const standingsUsers = loadStandingsUsers();
-    const userIndex = standingsUsers.findIndex((user) => user.name === targetName);
+    const userIndex = standingsUsers.findIndex((user) => user.name === targetName || user.email === targetName);
     const targetUser = userIndex >= 0 ? standingsUsers[userIndex] : { name: targetName, picks: [], superLocks: {} };
     targetUser.picks = (Array.isArray(targetUser.picks) ? targetUser.picks : []).filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
     targetUser.superLocks = targetUser.superLocks || {};
@@ -1298,6 +1352,22 @@ function saveWeekPicks(playerName = null) {
       standingsUsers.push(targetUser);
     }
     saveStandingsUsers(standingsUsers);
+
+    let serverSaved = false;
+    if (isCurrentUserCommissioner() && targetUser.email) {
+      serverSaved = await saveStandingsUserPicksToServer(
+        targetUser.email,
+        targetUser.name,
+        targetUser.picks,
+        targetUser.superLocks
+      );
+    }
+
+    if (targetUser.email && !serverSaved) {
+      showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek} locally. Server sync failed.`);
+      return true;
+    }
+
     showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek}.`);
     return true;
   }
@@ -1755,12 +1825,12 @@ function renderSuper7Contest() {
 
   const saveButton = pageBody.querySelector('#save-week-picks');
   if (saveButton) {
-    saveButton.addEventListener('click', function () {
+    saveButton.addEventListener('click', async function () {
       if (!isEditableWeek) {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
         return;
       }
-      const result = saveWeekPicks(currentEditingPlayerName);
+      const result = await saveWeekPicks(currentEditingPlayerName);
       if (result === false) {
         showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
         return;
@@ -2153,12 +2223,12 @@ function hidePopupMessage() {
   popupOverlay.classList.add('hidden');
 }
 
-function showProtectedPage() {
+async function showProtectedPage() {
   loginCard.classList.add('hidden');
   protectedCard.classList.remove('hidden');
   updateLoggedInUserDisplay();
-  syncCurrentUserStandingsRow();
-  refreshStandingsUsersFromServer();
+  await hydrateCurrentUserStateFromServer();
+  await refreshStandingsUsersFromServer();
 
   if (hasSavedPicksForCurrentWeek()) {
     currentPage = 'mypicks';

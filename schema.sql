@@ -18,9 +18,13 @@ create table if not exists public.standings_users (
   display_name text not null,
   picks jsonb not null default '[]'::jsonb,
   super_locks jsonb not null default '{}'::jsonb,
+  joined_contests jsonb not null default '[]'::jsonb,
   paid boolean not null default false,
   updated_at timestamptz not null default now()
 );
+
+alter table public.standings_users
+  add column if not exists joined_contests jsonb not null default '[]'::jsonb;
 
 create index if not exists sessions_token_hash_idx on public.sessions(token_hash);
 create index if not exists sessions_expires_at_idx on public.sessions(expires_at);

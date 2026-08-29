@@ -125,6 +125,7 @@ function normalizeStandingsUserRow(row) {
     name: row.display_name || row.email,
     picks: Array.isArray(row.picks) ? row.picks : [],
     superLocks: row.super_locks && typeof row.super_locks === 'object' ? row.super_locks : {},
+    joinedContests: Array.isArray(row.joined_contests) ? row.joined_contests : [],
     paid: Boolean(row.paid)
   };
 }
@@ -142,6 +143,7 @@ async function ensureStandingsUser(email) {
       display_name: normalizedEmail,
       picks: [],
       super_locks: {},
+      joined_contests: [],
       updated_at: new Date().toISOString()
     }, { onConflict: 'email', ignoreDuplicates: true });
   if (error) throw error;
@@ -203,7 +205,7 @@ async function handleApi(request, response) {
 
       const { data: standingsRows, error: standingsError } = await supabase
         .from('standings_users')
-        .select('email, display_name, picks, super_locks, paid, updated_at')
+        .select('email, display_name, picks, super_locks, joined_contests, paid, updated_at')
         .order('updated_at', { ascending: false });
       if (standingsError) throw standingsError;
 
@@ -222,6 +224,7 @@ async function handleApi(request, response) {
             name: email,
             picks: [],
             superLocks: {},
+            joinedContests: [],
             paid: false
           });
         }
@@ -241,6 +244,7 @@ async function handleApi(request, response) {
       const displayName = sanitizeDisplayName(body.displayName, session.email);
       const picks = Array.isArray(body.picks) ? body.picks : [];
       const superLocks = body.superLocks && typeof body.superLocks === 'object' ? body.superLocks : {};
+      const joinedContests = Array.isArray(body.joinedContests) ? body.joinedContests : [];
 
       const { data, error } = await supabase
         .from('standings_users')
@@ -249,9 +253,28 @@ async function handleApi(request, response) {
           display_name: displayName,
           picks,
           super_locks: superLocks,
+          joined_contests: joinedContests,
           updated_at: new Date().toISOString()
         }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, paid')
+        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .single();
+      if (error) throw error;
+
+      return sendJson(response, 200, { user: normalizeStandingsUserRow(data) });
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/standings-me') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      await ensureStandingsUser(session.email);
+
+      const { data, error } = await supabase
+        .from('standings_users')
+        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .eq('email', session.email)
         .single();
       if (error) throw error;
 
@@ -287,6 +310,50 @@ async function handleApi(request, response) {
       if (error) throw error;
 
       return sendJson(response, 200, { ok: true });
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/standings-user-picks') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+      if (!isCommissioner(session.email)) {
+        return sendJson(response, 403, { error: 'Only commissioner can update other player picks.' });
+      }
+
+      const body = await readRequestBody(request);
+      const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!validEmail(targetEmail)) {
+        return sendJson(response, 400, { error: 'Valid email is required.' });
+      }
+
+      const picks = Array.isArray(body.picks) ? body.picks : [];
+      const superLocks = body.superLocks && typeof body.superLocks === 'object' ? body.superLocks : {};
+
+      const { data: existingRow, error: existingError } = await supabase
+        .from('standings_users')
+        .select('display_name, paid, joined_contests')
+        .eq('email', targetEmail)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const displayName = sanitizeDisplayName(body.displayName, targetEmail);
+      const { data, error } = await supabase
+        .from('standings_users')
+        .upsert({
+          email: targetEmail,
+          display_name: displayName || existingRow?.display_name || targetEmail,
+          picks,
+          super_locks: superLocks,
+          joined_contests: Array.isArray(existingRow?.joined_contests) ? existingRow.joined_contests : [],
+          paid: Boolean(existingRow?.paid),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' })
+        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .single();
+      if (error) throw error;
+
+      return sendJson(response, 200, { user: normalizeStandingsUserRow(data) });
     }
 
     sendJson(response, 404, { error: 'Not found.' });
