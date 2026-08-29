@@ -845,10 +845,28 @@ function getWeekStartDate(week, date = new Date()) {
 
 function getMatchupKickoffDate(matchup, week) {
   const weekStart = getWeekStartDate(week);
-  const dayOffsets = { Wed: 0, Thu: 1, Fri: 2, Sat: 3, Sun: 4, Mon: 5, Tue: 6 };
-  const dayOffset = dayOffsets[matchup.day] ?? 0;
   const kickoff = new Date(weekStart);
-  kickoff.setDate(weekStart.getDate() + dayOffset);
+
+  const explicitDateMatch = String(matchup?.date || '').match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (explicitDateMatch) {
+    const month = Number(explicitDateMatch[1]);
+    const day = Number(explicitDateMatch[2]);
+    let year = weekStart.getFullYear();
+
+    // Handle year crossover windows (for example, late-December week start and January kickoff date).
+    const weekStartMonth = weekStart.getMonth() + 1;
+    if (weekStartMonth === 12 && month === 1) {
+      year += 1;
+    } else if (weekStartMonth === 1 && month === 12) {
+      year -= 1;
+    }
+
+    kickoff.setFullYear(year, month - 1, day);
+  } else {
+    const dayOffsets = { Wed: 0, Thu: 1, Fri: 2, Sat: 3, Sun: 4, Mon: 5, Tue: 6 };
+    const dayOffset = dayOffsets[matchup.day] ?? 0;
+    kickoff.setDate(weekStart.getDate() + dayOffset);
+  }
 
   const timeMatch = (matchup.time || '').match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
   if (timeMatch) {
