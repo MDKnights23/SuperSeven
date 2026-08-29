@@ -1881,27 +1881,67 @@ async function renderNewsPage() {
   }
 }
 
-function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
+function canRevealPickForViewer(pick, { isCurrentPlayerView, isCommissioner, now = new Date() }) {
+  if (isCurrentPlayerView || isCommissioner) {
+    return true;
+  }
+
+  const pickWeek = Number(pick?.week);
+  if (!Number.isFinite(pickWeek)) {
+    return false;
+  }
+
+  if (isWeekZero(pickWeek)) {
+    return true;
+  }
+
+  const currentWeek = Number(getCurrentContestWeek(now));
+  if (pickWeek < currentWeek) {
+    return true;
+  }
+  if (pickWeek > currentWeek) {
+    return false;
+  }
+
+  const matchup = getMatchupForPick(pick);
+  if (!matchup) {
+    return false;
+  }
+
+  const kickoff = getMatchupKickoffDate(matchup, pickWeek);
+  return now >= kickoff;
+}
+
+async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
   pageTitle.textContent = 'My Picks';
   pageText.textContent = 'Your saved Super 7 selections.';
   updateSiteStatusBar();
+  await refreshStandingsUsersFromServer();
 
   const currentWeek = getCurrentContestWeek();
   const visibleWeeks = Array.from({ length: 19 }, (_, index) => index);
   const currentUserLabel = getCurrentUserDisplayLabel();
+  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
+  const currentUserLabelNormalized = (currentUserLabel || '').trim().toLowerCase();
   const players = (() => {
     const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
-    if (isCurrentUserCommissioner()) {
-      const otherUsers = loadStandingsUsers().filter((user) => user.name !== currentUserLabel);
-      otherUsers.forEach((user) => {
-        list.push({
-          id: user.name,
-          label: user.name,
-          picks: Array.isArray(user.picks) ? user.picks : [],
-          superLocks: user.superLocks || {}
-        });
+    const otherUsers = loadStandingsUsers().filter((user) => {
+      const userEmailNormalized = (user.email || '').trim().toLowerCase();
+      const userNameNormalized = (user.name || '').trim().toLowerCase();
+      if (userEmailNormalized) {
+        return userEmailNormalized !== currentUserEmailNormalized;
+      }
+      return userNameNormalized !== currentUserLabelNormalized && userNameNormalized !== currentUserEmailNormalized;
+    });
+
+    otherUsers.forEach((user) => {
+      list.push({
+        id: user.email || user.name,
+        label: user.name,
+        picks: Array.isArray(user.picks) ? user.picks : [],
+        superLocks: user.superLocks || {}
       });
-    }
+    });
     return list;
   })();
 
@@ -1916,7 +1956,9 @@ function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
   const weekPicks = picksByWeek[activeWeek] || [];
   const lock = activePlayer.superLocks?.[activeWeek];
   const isCurrentPlayerView = activePlayer.id === 'me';
-  const canEditSelectedWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id) && (isCurrentPlayerView || isCurrentUserCommissioner());
+  const isCommissionerViewer = isCurrentUserCommissioner();
+  const canEditSelectedWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id) && (isCurrentPlayerView || isCommissionerViewer);
+  const visibilityNow = new Date();
 
   if (!visibleWeeks.length) {
     pageBody.innerHTML = '<p>You have not saved any picks yet. Go to Contests to join Super 7 and save selections.</p>';
@@ -1959,6 +2001,22 @@ function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
             <tbody>
               ${weekPicks
                 .map((pick) => {
+                  const canViewPick = canRevealPickForViewer(pick, {
+                    isCurrentPlayerView,
+                    isCommissioner: isCommissionerViewer,
+                    now: visibilityNow
+                  });
+
+                  if (!canViewPick) {
+                    return `
+                      <tr>
+                        <td><span class="help-text">Pick hidden until kickoff.</span></td>
+                        <td class="stacked-score"><div>-</div><div>-</div></td>
+                        <td>-</td>
+                      </tr>
+                    `;
+                  }
+
                   const matchup = getMatchupForPick(pick);
                   const outcome = getPickOutcome(pick, matchup);
                   const opponent = pick.team === pick.home ? pick.away : pick.home;
