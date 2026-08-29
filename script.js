@@ -660,6 +660,47 @@ function saveStandingsUsers(users) {
   localStorage.setItem('super7-standings-users', JSON.stringify(users));
 }
 
+async function refreshStandingsUsersFromServer() {
+  if (!currentUserEmail) {
+    return loadStandingsUsers();
+  }
+
+  try {
+    const response = await fetch('/api/standings-users', { credentials: 'same-origin' });
+    if (!response.ok) {
+      return loadStandingsUsers();
+    }
+
+    const payload = await response.json();
+    const users = Array.isArray(payload.users) ? payload.users : [];
+    saveStandingsUsers(users);
+    return users;
+  } catch {
+    return loadStandingsUsers();
+  }
+}
+
+async function syncCurrentUserStandingsRowToServer() {
+  if (!currentUserEmail) {
+    return;
+  }
+
+  try {
+    await fetch('/api/standings-me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        displayName: getCurrentUserDisplayLabel(),
+        picks: myPicks,
+        superLocks: superLocks
+      })
+    });
+  } catch {
+    // ignore network sync errors; local state remains usable
+  }
+}
+
 function pruneStandingsProfilesToOwner(keepEmail = COMMISSIONER_EMAIL) {
   const keepEmailNormalized = (keepEmail || '').trim().toLowerCase();
   if (!keepEmailNormalized) {
@@ -725,13 +766,32 @@ function syncCurrentUserStandingsRow() {
   const updatedStandingsUsers = standingsUsers.filter((_, index) => !matchingIndices.includes(index));
   updatedStandingsUsers.unshift(currentUserRecord);
   saveStandingsUsers(updatedStandingsUsers);
+  syncCurrentUserStandingsRowToServer();
 }
 
-function setPaidStatusForStandingsUser(userName, isPaid) {
+async function setPaidStatusForStandingsUser(userName, isPaid) {
   const standingsUsers = loadStandingsUsers();
   const userIndex = standingsUsers.findIndex((user) => user.name === userName);
   if (userIndex < 0) {
     return;
+  }
+
+  const userEmail = standingsUsers[userIndex].email;
+  if (userEmail) {
+    try {
+      const response = await fetch('/api/standings-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: userEmail, isPaid })
+      });
+      if (response.ok) {
+        await refreshStandingsUsersFromServer();
+        return;
+      }
+    } catch {
+      // fall through to local fallback
+    }
   }
 
   standingsUsers[userIndex] = {
@@ -1226,7 +1286,6 @@ function saveWeekPicks(playerName = null) {
 
   myPicks = myPicks.filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
   savePicks();
-  syncCurrentUserStandingsRow();
 
   if (selectedLock) {
     superLocks[selectedWeek] = selectedLock;
@@ -1761,9 +1820,10 @@ function selectPage(page) {
   }
 }
 
-function renderNewsPage() {
+async function renderNewsPage() {
   pageTitle.textContent = 'Standings';
   pageText.textContent = 'Current contest standings for all players.';
+  await refreshStandingsUsersFromServer();
 
   const standings = getStandingsRows();
   const isCommissioner = isCurrentUserCommissioner();
@@ -1806,7 +1866,7 @@ function renderNewsPage() {
 
   if (isCommissioner) {
     pageBody.querySelectorAll('.paid-toggle-button').forEach((button) => {
-      button.addEventListener('click', function () {
+      button.addEventListener('click', async function () {
         const userName = button.dataset.userName;
         const standingsUsers = loadStandingsUsers();
         const user = standingsUsers.find((entry) => entry.name === userName);
@@ -1814,7 +1874,7 @@ function renderNewsPage() {
           return;
         }
 
-        setPaidStatusForStandingsUser(userName, !user.paid);
+        await setPaidStatusForStandingsUser(userName, !user.paid);
         renderNewsPage();
       });
     });
@@ -2021,8 +2081,8 @@ function showProtectedPage() {
   loginCard.classList.add('hidden');
   protectedCard.classList.remove('hidden');
   updateLoggedInUserDisplay();
-  pruneStandingsProfilesToOwner();
   syncCurrentUserStandingsRow();
+  refreshStandingsUsersFromServer();
 
   if (hasSavedPicksForCurrentWeek()) {
     currentPage = 'mypicks';

@@ -13,6 +13,7 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
+const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
 const publicFiles = {
   '/': ['index.html', 'text/html'],
   '/index.html': ['index.html', 'text/html'],
@@ -106,8 +107,32 @@ async function currentSession(request) {
   return data ? { token, email: data.email } : null;
 }
 
+function isCommissioner(email) {
+  return typeof email === 'string' && email.toLowerCase() === COMMISSIONER_EMAIL.toLowerCase();
+}
+
+function sanitizeDisplayName(name, fallbackEmail) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (!trimmed) {
+    return fallbackEmail;
+  }
+  return trimmed.slice(0, 40);
+}
+
+function normalizeStandingsUserRow(row) {
+  return {
+    email: row.email,
+    name: row.display_name || row.email,
+    picks: Array.isArray(row.picks) ? row.picks : [],
+    superLocks: row.super_locks && typeof row.super_locks === 'object' ? row.super_locks : {},
+    paid: Boolean(row.paid)
+  };
+}
+
 async function handleApi(request, response) {
   try {
+    const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+
     if (request.method === 'GET' && request.url === '/api/session') {
       const session = await currentSession(request);
       return session ? sendJson(response, 200, { email: session.email }) : sendJson(response, 401, { error: 'Not signed in.' });
@@ -148,6 +173,80 @@ async function handleApi(request, response) {
         if (error) throw error;
       }
       return sendJson(response, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/standings-users') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const { data, error } = await supabase
+        .from('standings_users')
+        .select('email, display_name, picks, super_locks, paid, updated_at')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+
+      const users = (data || []).map(normalizeStandingsUserRow);
+      return sendJson(response, 200, { users });
+    }
+
+    if (request.method === 'PUT' && requestUrl.pathname === '/api/standings-me') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const body = await readRequestBody(request);
+      const displayName = sanitizeDisplayName(body.displayName, session.email);
+      const picks = Array.isArray(body.picks) ? body.picks : [];
+      const superLocks = body.superLocks && typeof body.superLocks === 'object' ? body.superLocks : {};
+
+      const { data, error } = await supabase
+        .from('standings_users')
+        .upsert({
+          email: session.email,
+          display_name: displayName,
+          picks,
+          super_locks: superLocks,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' })
+        .select('email, display_name, picks, super_locks, paid')
+        .single();
+      if (error) throw error;
+
+      return sendJson(response, 200, { user: normalizeStandingsUserRow(data) });
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/standings-paid') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+      if (!isCommissioner(session.email)) {
+        return sendJson(response, 403, { error: 'Only commissioner can update paid status.' });
+      }
+
+      const body = await readRequestBody(request);
+      const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!validEmail(targetEmail)) {
+        return sendJson(response, 400, { error: 'Valid email is required.' });
+      }
+
+      const isPaid = Boolean(body.isPaid);
+      const { error } = await supabase
+        .from('standings_users')
+        .upsert({
+          email: targetEmail,
+          display_name: targetEmail,
+          picks: [],
+          super_locks: {},
+          paid: isPaid,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' });
+      if (error) throw error;
+
+      return sendJson(response, 200, { ok: true });
     }
 
     sendJson(response, 404, { error: 'Not found.' });
