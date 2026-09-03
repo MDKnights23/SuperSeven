@@ -136,6 +136,17 @@ async function ensureStandingsUser(email) {
     return;
   }
 
+  const { data: existingUser, error: readError } = await supabase
+    .from('standings_users')
+    .select('joined_contests')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+  if (readError) throw readError;
+
+  const joinedContests = Array.isArray(existingUser?.joined_contests) && existingUser.joined_contests.length
+    ? existingUser.joined_contests
+    : ['super7'];
+
   const { error } = await supabase
     .from('standings_users')
     .upsert({
@@ -143,10 +154,30 @@ async function ensureStandingsUser(email) {
       display_name: normalizedEmail,
       picks: [],
       super_locks: {},
-      joined_contests: [],
+      joined_contests: joinedContests,
       updated_at: new Date().toISOString()
     }, { onConflict: 'email', ignoreDuplicates: true });
   if (error) throw error;
+}
+
+async function listCommissionerUsers() {
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select('email, created_at')
+    .order('created_at', { ascending: false });
+  if (usersError) throw usersError;
+
+  const { data: standingsRows, error: standingsError } = await supabase
+    .from('standings_users')
+    .select('email, display_name');
+  if (standingsError) throw standingsError;
+
+  const displayNamesByEmail = new Map((standingsRows || []).map((row) => [String(row.email).toLowerCase(), row.display_name || row.email]));
+
+  return (users || []).map((user) => ({
+    email: user.email,
+    displayName: displayNamesByEmail.get(String(user.email).toLowerCase()) || user.email
+  }));
 }
 
 async function handleApi(request, response) {
@@ -195,6 +226,43 @@ async function handleApi(request, response) {
         if (error) throw error;
       }
       return sendJson(response, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/commish-users') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+      if (!isCommissioner(session.email)) {
+        return sendJson(response, 403, { error: 'Only the commissioner can view member details.' });
+      }
+
+      const users = await listCommissionerUsers();
+      return sendJson(response, 200, { users });
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/commish-remove-user') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+      if (!isCommissioner(session.email)) {
+        return sendJson(response, 403, { error: 'Only the commissioner can remove members.' });
+      }
+
+      const { email: rawEmail } = await readRequestBody(request);
+      const targetEmail = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+      if (!validEmail(targetEmail)) {
+        return sendJson(response, 400, { error: 'Valid email is required.' });
+      }
+      if (targetEmail === COMMISSIONER_EMAIL.toLowerCase()) {
+        return sendJson(response, 403, { error: 'The commissioner account cannot be removed.' });
+      }
+
+      const { error } = await supabase.from('users').delete().eq('email', targetEmail);
+      if (error) throw error;
+
+      return sendJson(response, 200, { ok: true });
     }
 
     if (request.method === 'GET' && requestUrl.pathname === '/api/standings-users') {

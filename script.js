@@ -47,6 +47,13 @@ function isCurrentUserCommissioner(email = currentUserEmail) {
   return getCurrentUserRole(email) === USER_ROLES.COMMISSIONER;
 }
 
+function updateCommissionerNavVisibility() {
+  navLinks.forEach(function (link) {
+    const isCommishLink = link.dataset.page === 'commish';
+    link.classList.toggle('hidden', isCommishLink && !isCurrentUserCommissioner());
+  });
+}
+
 function updateLoggedInUserDisplay() {
   const loggedInEmail = document.getElementById('logged-in-email');
   if (!loggedInEmail) {
@@ -576,6 +583,13 @@ function joinContest(contestId) {
   }
 }
 
+function ensureDefaultContestJoined() {
+  if (!joinedContests.includes('super7')) {
+    joinedContests.push('super7');
+    saveJoinedContests();
+  }
+}
+
 function isContestJoined(contestId) {
   return joinedContests.includes(contestId);
 }
@@ -623,6 +637,92 @@ function saveDisplayName(name, email = currentUserEmail) {
   } else {
     localStorage.removeItem(key);
   }
+}
+
+function getAvatarDefaults(name = '') {
+  const fallbackName = typeof name === 'string' && name.trim() ? name.trim() : 'Player';
+  const initial = fallbackName.charAt(0).toUpperCase() || 'P';
+  const palette = ['#4338ca', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#f97316'];
+  const colorIndex = [...fallbackName].reduce((sum, character) => sum + character.charCodeAt(0), 0) % palette.length;
+  const color = palette[colorIndex];
+  return {
+    initial,
+    color,
+    textColor: getContrastTextColor(color)
+  };
+}
+
+function getContrastTextColor(backgroundColor) {
+  const hex = typeof backgroundColor === 'string' ? backgroundColor.trim() : '';
+  if (!hex) {
+    return '#ffffff';
+  }
+
+  const normalized = hex.startsWith('#') ? hex.slice(1) : hex;
+  if (normalized.length === 3) {
+    const expanded = normalized.split('').map((character) => character + character).join('');
+    return getContrastTextColor(`#${expanded}`);
+  }
+
+  if (normalized.length !== 6) {
+    return '#ffffff';
+  }
+
+  const red = parseInt(normalized.slice(0, 2), 16);
+  const green = parseInt(normalized.slice(2, 4), 16);
+  const blue = parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.6 ? '#111827' : '#ffffff';
+}
+
+function normalizeAvatarInitial(initial) {
+  const cleaned = (typeof initial === 'string' ? initial.trim() : '').replace(/[^A-Za-z0-9]/g, '').slice(0, 3);
+  return cleaned ? cleaned.toUpperCase() : 'P';
+}
+
+function getAvatarConfigForEmail(email = currentUserEmail) {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const fallback = getAvatarDefaults(getDisplayName(email));
+  const storageKey = normalizedEmail ? `super7-avatar:${normalizedEmail}` : '';
+  if (!storageKey) {
+    return fallback;
+  }
+
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw);
+    const baseInitial = typeof parsed.initial === 'string' && parsed.initial.trim() ? normalizeAvatarInitial(parsed.initial) : fallback.initial;
+    const baseColor = typeof parsed.color === 'string' && parsed.color ? parsed.color : fallback.color;
+    const baseTextColor = typeof parsed.textColor === 'string' && parsed.textColor ? parsed.textColor : getContrastTextColor(baseColor);
+    return {
+      initial: baseInitial,
+      color: baseColor,
+      textColor: baseTextColor
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveAvatarConfig(config, email = currentUserEmail) {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!normalizedEmail) {
+    return;
+  }
+
+  const fallback = getAvatarDefaults(getDisplayName(email));
+  const baseColor = (config && typeof config.color === 'string' && config.color) ? config.color : fallback.color;
+  const avatar = {
+    initial: normalizeAvatarInitial(config && typeof config.initial === 'string' ? config.initial : fallback.initial),
+    color: baseColor,
+    textColor: (config && typeof config.textColor === 'string' && config.textColor) ? config.textColor : getContrastTextColor(baseColor)
+  };
+
+  localStorage.setItem(`super7-avatar:${normalizedEmail}`, JSON.stringify(avatar));
+  return avatar;
 }
 
 function loadStandingsUsers() {
@@ -1099,6 +1199,7 @@ function getStandingsRows() {
 
     return {
       name: user.name,
+      email: user.email || '',
       points: Number(points.toFixed(1)),
       correct,
       pushes,
@@ -1461,7 +1562,9 @@ loginForm.addEventListener('submit', function (event) {
     })
     .then(function (result) {
       currentUserEmail = result.email;
+      ensureDefaultContestJoined();
       updateLoggedInUserDisplay();
+      updateCommissionerNavVisibility();
       loginForm.reset();
       showProtectedPage();
     })
@@ -1486,6 +1589,7 @@ logoutButton.addEventListener('click', function () {
     .finally(function () {
       currentUserEmail = null;
       updateLoggedInUserDisplay();
+      updateCommissionerNavVisibility();
       formMessage.textContent = '';
       loginCard.classList.remove('hidden');
       protectedCard.classList.add('hidden');
@@ -1511,16 +1615,199 @@ function checkSession() {
       if (result?.email) {
         currentUserEmail = result.email;
         updateLoggedInUserDisplay();
+        updateCommissionerNavVisibility();
         showProtectedPage();
       }
     });
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getAvatarMarkup(player, fallbackLabel = 'P') {
+  const candidateEmail = typeof player?.email === 'string' && player.email.trim() ? player.email.trim() : (typeof player?.name === 'string' && player.name.includes('@') ? player.name : '');
+  const sourceEmail = candidateEmail || currentUserEmail;
+  const avatarConfig = sourceEmail ? getAvatarConfigForEmail(sourceEmail) : getAvatarDefaults(typeof player?.name === 'string' ? player.name : fallbackLabel);
+  const label = typeof player?.name === 'string' && player.name.trim() ? player.name.trim() : (sourceEmail ? getDisplayName(sourceEmail) : fallbackLabel);
+  const initial = avatarConfig.initial || getAvatarDefaults(label).initial;
+  const tooltip = escapeHtml(typeof player?.email === 'string' && player.email.trim() ? player.email : label);
+  return `<span class="player-avatar" title="${tooltip}" style="background:${avatarConfig.color}; color:${avatarConfig.textColor};">${escapeHtml(initial)}</span>`;
+}
+
 function renderHomePage() {
   pageTitle.textContent = 'Home';
-  pageText.textContent = 'This is the home page.';
-  pageBody.innerHTML = '';
+  pageText.textContent = 'Current-week matchups and who picked each side.';
   updateSiteStatusBar();
+
+  const currentWeek = getCurrentContestWeek();
+  const weekData = getWeekData(currentWeek);
+  const allPlayers = Array.isArray(loadStandingsUsers()) ? loadStandingsUsers() : [];
+  const selectionsByTeam = new Map();
+
+  allPlayers.forEach((player) => {
+    const picks = Array.isArray(player?.picks) ? player.picks : [];
+    picks.forEach((pick) => {
+      if (Number(pick.week) !== Number(currentWeek)) {
+        return;
+      }
+
+      const teamName = normalizeTeamName(pick.team || pick.home || pick.away || '');
+      if (!teamName) {
+        return;
+      }
+
+      if (!selectionsByTeam.has(teamName)) {
+        selectionsByTeam.set(teamName, []);
+      }
+      selectionsByTeam.get(teamName).push(player);
+    });
+  });
+
+  const matchups = [...(weekData?.matchups || [])].sort((a, b) => {
+    const left = getMatchupSortValue(a);
+    const right = getMatchupSortValue(b);
+    return left[0] - right[0] || left[1] - right[1] || left[2].localeCompare(right[2]);
+  });
+
+  pageBody.innerHTML = `
+    <div class="contest-card home-matchups-card">
+      <div class="contest-card-header">
+        <h2>Week ${currentWeek} Matchups</h2>
+        <p>See the spread and which players picked each side.</p>
+      </div>
+      <div class="home-matchups-grid">
+        ${matchups.map((matchup) => {
+          const awayTeam = normalizeTeamName(matchup.away);
+          const homeTeam = normalizeTeamName(matchup.home);
+          const awayPlayers = (selectionsByTeam.get(awayTeam) || []).map((player) => getAvatarMarkup(player)).join('');
+          const homePlayers = (selectionsByTeam.get(homeTeam) || []).map((player) => getAvatarMarkup(player)).join('');
+          const awayPickers = awayPlayers ? `<div class="avatar-row">${awayPlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
+          const homePickers = homePlayers ? `<div class="avatar-row">${homePlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
+          return `
+            <div class="mini-matchup-card">
+              <div class="mini-matchup-row">
+                <div class="mini-team-block">
+                  <div class="mini-team-topline">
+                    <span class="mini-team-name">${escapeHtml(awayTeam)}</span>
+                    <span class="mini-team-line">${escapeHtml(invertLine(matchup.homeLine))}</span>
+                  </div>
+                  ${awayPickers}
+                </div>
+                <div class="mini-vs">@</div>
+                <div class="mini-team-block mini-team-right">
+                  <div class="mini-team-topline">
+                    <span class="mini-team-name">${escapeHtml(homeTeam)}</span>
+                    <span class="mini-team-line">${escapeHtml(matchup.homeLine)}</span>
+                  </div>
+                  ${homePickers}
+                </div>
+              </div>
+              <div class="mini-matchup-time">${escapeHtml(getLocalKickoffLabel(matchup, currentWeek))}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function renderCommishPage() {
+  pageTitle.textContent = 'Commish';
+  pageText.textContent = 'Manage site members.';
+
+  if (!isCurrentUserCommissioner()) {
+    pageBody.innerHTML = '<p class="help-text">Only the commissioner can access this page.</p>';
+    return;
+  }
+
+  updateSiteStatusBar();
+
+  try {
+    const response = await fetch('/api/commish-users', { credentials: 'same-origin' });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to load member list.');
+    }
+
+    const users = Array.isArray(payload.users) ? payload.users : [];
+    pageBody.innerHTML = `
+      <div class="contest-card">
+        <div class="contest-card-header">
+          <h2>Site members</h2>
+          <p>Review each account and remove a user from the website when needed.</p>
+        </div>
+        <table class="mypicks-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Standings name</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.length
+              ? users.map((user) => {
+                  const email = String(user.email || '');
+                  const displayName = String(user.displayName || user.email || '');
+                  const isCommissioner = email.toLowerCase() === COMMISSIONER_EMAIL.toLowerCase();
+                  return `
+                    <tr>
+                      <td>${escapeHtml(email)}</td>
+                      <td>${escapeHtml(displayName)}</td>
+                      <td>
+                        ${isCommissioner
+                          ? '<span class="result-mark correct" title="Commissioner">👑</span>'
+                          : `<button type="button" class="secondary-button remove-user-button" data-email="${escapeHtml(email)}">Remove</button>`}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')
+              : '<tr><td colspan="3">No members found.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    pageBody.querySelectorAll('.remove-user-button').forEach((button) => {
+      button.addEventListener('click', async function () {
+        const email = button.dataset.email;
+        if (!email) {
+          return;
+        }
+
+        const confirmed = window.confirm(`Remove ${email} from the website? This will delete their account and associated data.`);
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/commish-remove-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ email })
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to remove user.');
+          }
+          showMessage(`${email} removed.`);
+          renderCommishPage();
+        } catch (error) {
+          showMessage(error.message);
+        }
+      });
+    });
+  } catch (error) {
+    pageBody.innerHTML = `<p class="help-text">Unable to load the member list.</p>`;
+    showMessage(error.message);
+  }
 }
 
 function renderNewsPage() {
@@ -1557,16 +1844,38 @@ function renderMyInfoPage() {
   updateSiteStatusBar();
 
   const currentName = getDisplayName(currentUserEmail);
+  const avatarConfig = getAvatarConfigForEmail(currentUserEmail);
   pageBody.innerHTML = `
     <div class="contest-card">
       <div class="contest-card-header">
         <h2>Standings name</h2>
         <p>Your name defaults to your email address and can be changed here.</p>
       </div>
+      <div class="avatar-preview-wrap">
+        <span class="player-avatar avatar-preview" style="background:${avatarConfig.color}; color:${avatarConfig.textColor};">${escapeHtml(avatarConfig.initial)}</span>
+      </div>
       <form id="display-name-form">
         <label for="display-name">Name</label>
-        <input type="text" id="display-name" name="display-name" value="${currentName}" maxlength="40" />
-        <button type="submit" class="secondary-button">Save name</button>
+        <input type="text" id="display-name" name="display-name" value="${escapeHtml(currentName)}" maxlength="40" />
+
+        <div class="avatar-config-row">
+          <div class="avatar-config-field">
+            <label for="avatar-initial">Avatar initials (up to 3)</label>
+            <input type="text" id="avatar-initial" name="avatar-initial" value="${escapeHtml(avatarConfig.initial)}" maxlength="3" />
+          </div>
+
+          <div class="avatar-config-field">
+            <label for="avatar-color">Avatar color</label>
+            <input type="color" id="avatar-color" name="avatar-color" value="${escapeHtml(avatarConfig.color)}" />
+          </div>
+
+          <div class="avatar-config-field">
+            <label for="avatar-text-color">Text color</label>
+            <input type="color" id="avatar-text-color" name="avatar-text-color" value="${escapeHtml(avatarConfig.textColor)}" />
+          </div>
+        </div>
+
+        <button type="submit" class="secondary-button">Save profile</button>
       </form>
     </div>
   `;
@@ -1576,63 +1885,23 @@ function renderMyInfoPage() {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       const nameInput = pageBody.querySelector('#display-name');
-      if (!nameInput) {
+      const initialInput = pageBody.querySelector('#avatar-initial');
+      const colorInput = pageBody.querySelector('#avatar-color');
+      const textColorInput = pageBody.querySelector('#avatar-text-color');
+      if (!nameInput || !initialInput || !colorInput || !textColorInput) {
         return;
       }
 
       saveDisplayName(nameInput.value, currentUserEmail);
+      saveAvatarConfig({
+        initial: initialInput.value,
+        color: colorInput.value,
+        textColor: textColorInput.value
+      }, currentUserEmail);
       syncCurrentUserStandingsRow();
       updateLoggedInUserDisplay();
-      showMessage('Display name updated.');
+      showMessage('Profile updated.');
       renderMyInfoPage();
-    });
-  }
-}
-
-function renderContestsPage() {
-  pageTitle.textContent = 'Contests';
-  pageText.textContent = 'Available contests to join.';
-  const isJoined = isContestJoined(contests.super7.id);
-  updateSiteStatusBar();
-
-  const currentWeek = getCurrentContestWeek();
-  const currentWeekPicks = myPicks.filter((pick) => pick.week === currentWeek).length;
-
-  pageBody.innerHTML = `
-    <div class="contest-list">
-      <div class="contest-card">
-        <div class="contest-card-header">
-          <h2>${contests.super7.name}</h2>
-          <p>${contests.super7.description}</p>
-          <p><strong>${currentWeekPicks}</strong> of 7 picks saved for Week ${currentWeek}.</p>
-        </div>
-        <button type="button" class="select-contest-button" data-contest="super7">${isJoined ? 'View Super 7' : 'Join Super 7'}</button>
-        <button type="button" class="secondary-button" id="view-my-picks">View My Picks</button>
-      </div>
-    </div>
-  `;
-
-  const contestButton = pageBody.querySelector('.select-contest-button');
-  if (contestButton) {
-    contestButton.addEventListener('click', function () {
-      if (!isJoined) {
-        joinContest(contests.super7.id);
-        renderContestsPage();
-        return;
-      }
-
-      selectedContest = contests.super7.id;
-      selectedWeek = null;
-      selectedTeams = [];
-      selectedLock = null;
-      renderSuper7Contest();
-    });
-  }
-
-  const viewPicksButton = pageBody.querySelector('#view-my-picks');
-  if (viewPicksButton) {
-    viewPicksButton.addEventListener('click', function () {
-      selectPage('mypicks');
     });
   }
 }
@@ -1774,7 +2043,7 @@ function renderSuper7Contest() {
           </div>
         ` : '<p class="help-text">This week is locked and cannot be edited.</p>'}
       ` : '<p class="help-text">Choose a week to view the matchup board and build your 7-game card.</p>'}
-      <button type="button" class="secondary-button" id="back-to-contests">Back to contests</button>
+      <button type="button" class="secondary-button" id="back-to-picks">Back to My Picks</button>
     </div>
   `;
 
@@ -1872,16 +2141,20 @@ function renderSuper7Contest() {
     });
   }
 
-  const backButton = pageBody.querySelector('#back-to-contests');
+  const backButton = pageBody.querySelector('#back-to-picks');
   if (backButton) {
     backButton.addEventListener('click', function () {
       selectedContest = null;
-      renderContestsPage();
+      selectPage('mypicks');
     });
   }
 }
 
 function selectPage(page) {
+  if (page === 'commish' && !isCurrentUserCommissioner()) {
+    page = 'home';
+  }
+
   currentPage = page;
   navLinks.forEach(function (link) {
     link.classList.toggle('active', link.dataset.page === page);
@@ -1895,8 +2168,8 @@ function selectPage(page) {
 
   if (page === 'home') {
     renderHomePage();
-  } else if (page === 'contests') {
-    renderContestsPage();
+  } else if (page === 'commish') {
+    renderCommishPage();
   } else if (page === 'news') {
     renderNewsPage();
   } else if (page === 'myinfo' || page === 'about') {
@@ -1935,7 +2208,7 @@ async function renderNewsPage() {
         <tbody>
           ${standings.map((row) => `
             <tr>
-              <td>${row.name}</td>
+              <td title="${escapeHtml(row.email || row.name)}">${escapeHtml(row.name)}</td>
               <td>${row.points}</td>
               <td>${row.pickRecord}</td>
               <td>${row.superLockRecord}</td>
@@ -2049,8 +2322,7 @@ async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1)
   const visibilityNow = new Date();
 
   if (!visibleWeeks.length) {
-    pageBody.innerHTML = '<p>You have not saved any picks yet. Go to Contests to join Super 7 and save selections.</p>';
-    return;
+    pageBody.innerHTML = '<p>You have not saved any picks yet. Sign up for the Super 7 contest and start adding selections.</p>';
   }
 
   pageBody.innerHTML = `
@@ -2230,9 +2502,6 @@ async function showProtectedPage() {
   await hydrateCurrentUserStateFromServer();
   await refreshStandingsUsersFromServer();
 
-  if (hasSavedPicksForCurrentWeek()) {
-    currentPage = 'mypicks';
-  }
-
+  currentPage = 'home';
   selectPage(currentPage);
 }
