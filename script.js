@@ -206,6 +206,17 @@ const teamNameAliases = {
   'Kansas City Chiefs': 'Kansas City Chiefs'
 };
 
+function normalizeEntryName(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 function normalizeTeamName(team) {
   if (!team || typeof team !== 'string') {
     return team;
@@ -1640,6 +1651,22 @@ function getAvatarMarkup(player, fallbackLabel = 'P') {
   return `<span class="player-avatar" title="${tooltip}" style="background:${avatarConfig.color}; color:${avatarConfig.textColor};">${escapeHtml(initial)}</span>`;
 }
 
+function getLockedAvatarMarkup() {
+  return '<span class="player-avatar player-avatar-locked" title="Pick locked until kickoff" aria-label="Locked pick"><span class="padlock">🔒</span></span>';
+}
+
+function getHomePageSelectionMarkup(player, pick) {
+  const playerEmail = typeof player?.email === 'string' ? player.email.trim().toLowerCase() : '';
+  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
+  const currentPlayerView = Boolean(playerEmail && playerEmail === currentUserEmailNormalized) || (typeof player?.name === 'string' && normalizeEntryName(player.name) === normalizeEntryName(getCurrentUserDisplayLabel()));
+  const canReveal = Boolean(pick) && canRevealPickForViewer(pick, {
+    isCurrentPlayerView: currentPlayerView,
+    isCommissioner: isCurrentUserCommissioner(),
+    now: new Date()
+  });
+  return canReveal ? getAvatarMarkup(player) : getLockedAvatarMarkup();
+}
+
 function renderHomePage() {
   pageTitle.textContent = 'Home';
   pageText.textContent = 'Current-week matchups and who picked each side.';
@@ -1665,7 +1692,7 @@ function renderHomePage() {
       if (!selectionsByTeam.has(teamName)) {
         selectionsByTeam.set(teamName, []);
       }
-      selectionsByTeam.get(teamName).push(player);
+      selectionsByTeam.get(teamName).push({ player, pick });
     });
   });
 
@@ -1685,8 +1712,8 @@ function renderHomePage() {
         ${matchups.map((matchup) => {
           const awayTeam = normalizeTeamName(matchup.away);
           const homeTeam = normalizeTeamName(matchup.home);
-          const awayPlayers = (selectionsByTeam.get(awayTeam) || []).map((player) => getAvatarMarkup(player)).join('');
-          const homePlayers = (selectionsByTeam.get(homeTeam) || []).map((player) => getAvatarMarkup(player)).join('');
+          const awayPlayers = (selectionsByTeam.get(awayTeam) || []).map(({ player, pick }) => getHomePageSelectionMarkup(player, pick)).join('');
+          const homePlayers = (selectionsByTeam.get(homeTeam) || []).map(({ player, pick }) => getHomePageSelectionMarkup(player, pick)).join('');
           const awayPickers = awayPlayers ? `<div class="avatar-row">${awayPlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
           const homePickers = homePlayers ? `<div class="avatar-row">${homePlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
           return `
