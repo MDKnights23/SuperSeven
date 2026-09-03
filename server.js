@@ -31,12 +31,17 @@ function sendJson(response, statusCode, body, headers = {}) {
 }
 
 function sessionCookie(token) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`;
+  const isSecureContext = process.env.NODE_ENV === 'production' || process.env.HTTPS === 'true';
+  const secureFlag = isSecureContext ? '; Secure' : '';
+  const sameSite = isSecureContext ? 'None' : 'Lax';
+  return `session=${token}; HttpOnly; SameSite=${sameSite}; Path=/; Max-Age=86400${secureFlag}`;
 }
 
 function clearSessionCookie() {
-  return 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0';
+  const isSecureContext = process.env.NODE_ENV === 'production' || process.env.HTTPS === 'true';
+  const secureFlag = isSecureContext ? '; Secure' : '';
+  const sameSite = isSecureContext ? 'None' : 'Lax';
+  return `session=; HttpOnly; SameSite=${sameSite}; Path=/; Max-Age=0${secureFlag}`;
 }
 
 function parseCookies(request) {

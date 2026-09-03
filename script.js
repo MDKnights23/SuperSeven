@@ -697,6 +697,29 @@ function getAvatarConfigForEmail(email = currentUserEmail) {
   const storageKey = normalizedEmail ? `super7-avatar:${normalizedEmail}` : '';
 
   try {
+    const standingsUsers = loadStandingsUsers();
+    const standingsUser = standingsUsers.find((user) => (user.email || '').trim().toLowerCase() === normalizedEmail);
+    if (standingsUser) {
+      const baseInitial = normalizeAvatarInitial(standingsUser.avatarInitial || standingsUser.avatar_initial || fallback.initial);
+      const baseColor = typeof standingsUser.avatarColor === 'string' && standingsUser.avatarColor ? standingsUser.avatarColor : fallback.color;
+      const baseTextColor = typeof standingsUser.avatarTextColor === 'string' && standingsUser.avatarTextColor ? standingsUser.avatarTextColor : getContrastTextColor(baseColor);
+      const avatar = {
+        initial: baseInitial,
+        color: baseColor,
+        textColor: baseTextColor
+      };
+
+      if (storageKey) {
+        localStorage.setItem(storageKey, JSON.stringify({
+          initial: avatar.initial,
+          color: avatar.color,
+          textColor: avatar.textColor
+        }));
+      }
+
+      return avatar;
+    }
+
     if (storageKey) {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
@@ -710,19 +733,6 @@ function getAvatarConfigForEmail(email = currentUserEmail) {
           textColor: baseTextColor
         };
       }
-    }
-
-    const standingsUsers = loadStandingsUsers();
-    const standingsUser = standingsUsers.find((user) => (user.email || '').trim().toLowerCase() === normalizedEmail);
-    if (standingsUser) {
-      const baseInitial = normalizeAvatarInitial(standingsUser.avatarInitial || standingsUser.avatar_initial || fallback.initial);
-      const baseColor = typeof standingsUser.avatarColor === 'string' && standingsUser.avatarColor ? standingsUser.avatarColor : fallback.color;
-      const baseTextColor = typeof standingsUser.avatarTextColor === 'string' && standingsUser.avatarTextColor ? standingsUser.avatarTextColor : getContrastTextColor(baseColor);
-      return {
-        initial: baseInitial,
-        color: baseColor,
-        textColor: baseTextColor
-      };
     }
 
     return fallback;
@@ -788,7 +798,23 @@ function loadStandingsUsers() {
 }
 
 function saveStandingsUsers(users) {
-  localStorage.setItem('super7-standings-users', JSON.stringify(users));
+  const normalizedUsers = Array.isArray(users) ? users : [];
+  localStorage.setItem('super7-standings-users', JSON.stringify(normalizedUsers));
+
+  normalizedUsers.forEach((user) => {
+    const email = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
+    if (!email) {
+      return;
+    }
+
+    const avatar = {
+      initial: normalizeAvatarInitial(user.avatarInitial || user.avatar_initial || getAvatarDefaults(user.name || email).initial),
+      color: (typeof user.avatarColor === 'string' && user.avatarColor) ? user.avatarColor : ((typeof user.avatar_color === 'string' && user.avatar_color) ? user.avatar_color : getAvatarDefaults(user.name || email).color),
+      textColor: (typeof user.avatarTextColor === 'string' && user.avatarTextColor) ? user.avatarTextColor : ((typeof user.avatar_text_color === 'string' && user.avatar_text_color) ? user.avatar_text_color : getContrastTextColor((typeof user.avatarColor === 'string' && user.avatarColor) ? user.avatarColor : ((typeof user.avatar_color === 'string' && user.avatar_color) ? user.avatar_color : getAvatarDefaults(user.name || email).color)))
+    };
+
+    localStorage.setItem(`super7-avatar:${email}`, JSON.stringify(avatar));
+  });
 }
 
 async function refreshStandingsUsersFromServer() {
