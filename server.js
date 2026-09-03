@@ -119,6 +119,19 @@ function sanitizeDisplayName(name, fallbackEmail) {
   return trimmed.slice(0, 40);
 }
 
+function normalizeAvatarInitial(value) {
+  const cleaned = String(value ?? '').replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+  return cleaned || 'P';
+}
+
+function normalizeAvatarColor(value, fallback) {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (!candidate) {
+    return fallback;
+  }
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate) ? candidate : fallback;
+}
+
 function normalizeStandingsUserRow(row) {
   return {
     email: row.email,
@@ -126,7 +139,10 @@ function normalizeStandingsUserRow(row) {
     picks: Array.isArray(row.picks) ? row.picks : [],
     superLocks: row.super_locks && typeof row.super_locks === 'object' ? row.super_locks : {},
     joinedContests: Array.isArray(row.joined_contests) ? row.joined_contests : [],
-    paid: Boolean(row.paid)
+    paid: Boolean(row.paid),
+    avatarInitial: normalizeAvatarInitial(row.avatar_initial),
+    avatarColor: normalizeAvatarColor(row.avatar_color, '#7c3aed'),
+    avatarTextColor: normalizeAvatarColor(row.avatar_text_color, '#ffffff')
   };
 }
 
@@ -155,6 +171,9 @@ async function ensureStandingsUser(email) {
       picks: [],
       super_locks: {},
       joined_contests: joinedContests,
+      avatar_initial: 'P',
+      avatar_color: '#7c3aed',
+      avatar_text_color: '#ffffff',
       updated_at: new Date().toISOString()
     }, { onConflict: 'email', ignoreDuplicates: true });
   if (error) throw error;
@@ -273,7 +292,7 @@ async function handleApi(request, response) {
 
       const { data: standingsRows, error: standingsError } = await supabase
         .from('standings_users')
-        .select('email, display_name, picks, super_locks, joined_contests, paid, updated_at')
+        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color, updated_at')
         .order('updated_at', { ascending: false });
       if (standingsError) throw standingsError;
 
@@ -302,6 +321,48 @@ async function handleApi(request, response) {
       return sendJson(response, 200, { users });
     }
 
+    if (request.method === 'POST' && requestUrl.pathname === '/api/avatar-me') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const body = await readRequestBody(request);
+      const { data: existingRow, error: existingError } = await supabase
+        .from('standings_users')
+        .select('display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        .eq('email', session.email)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const displayName = sanitizeDisplayName(existingRow?.display_name || session.email, session.email);
+      const picks = Array.isArray(existingRow?.picks) ? existingRow.picks : [];
+      const superLocks = existingRow?.super_locks && typeof existingRow.super_locks === 'object' ? existingRow.super_locks : {};
+      const joinedContests = Array.isArray(existingRow?.joined_contests) ? existingRow.joined_contests : ['super7'];
+      const avatarInitial = normalizeAvatarInitial(body.initial || body.avatarInitial || body.avatar_initial || existingRow?.avatar_initial || 'P');
+      const avatarColor = normalizeAvatarColor(body.color || body.avatarColor || body.avatar_color || existingRow?.avatar_color, '#7c3aed');
+      const avatarTextColor = normalizeAvatarColor(body.textColor || body.avatarTextColor || body.avatar_text_color || existingRow?.avatar_text_color, '#ffffff');
+
+      const { data, error } = await supabase
+        .from('standings_users')
+        .upsert({
+          email: session.email,
+          display_name: displayName,
+          picks,
+          super_locks: superLocks,
+          joined_contests: joinedContests,
+          avatar_initial: avatarInitial,
+          avatar_color: avatarColor,
+          avatar_text_color: avatarTextColor,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' })
+        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        .single();
+      if (error) throw error;
+
+      return sendJson(response, 200, { user: normalizeStandingsUserRow(data) });
+    }
+
     if (request.method === 'PUT' && requestUrl.pathname === '/api/standings-me') {
       const session = await currentSession(request);
       if (!session) {
@@ -322,9 +383,12 @@ async function handleApi(request, response) {
           picks,
           super_locks: superLocks,
           joined_contests: joinedContests,
+          avatar_initial: normalizeAvatarInitial(body.avatarInitial || body.avatar_initial || 'P'),
+          avatar_color: normalizeAvatarColor(body.avatarColor || body.avatar_color, '#7c3aed'),
+          avatar_text_color: normalizeAvatarColor(body.avatarTextColor || body.avatar_text_color, '#ffffff'),
           updated_at: new Date().toISOString()
         }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .single();
       if (error) throw error;
 
@@ -341,7 +405,7 @@ async function handleApi(request, response) {
 
       const { data, error } = await supabase
         .from('standings_users')
-        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .eq('email', session.email)
         .single();
       if (error) throw error;
@@ -400,12 +464,15 @@ async function handleApi(request, response) {
 
       const { data: existingRow, error: existingError } = await supabase
         .from('standings_users')
-        .select('display_name, paid, joined_contests')
+        .select('display_name, paid, joined_contests, avatar_initial, avatar_color, avatar_text_color')
         .eq('email', targetEmail)
         .maybeSingle();
       if (existingError) throw existingError;
 
       const displayName = sanitizeDisplayName(body.displayName, targetEmail);
+      const avatarInitial = normalizeAvatarInitial(body.avatarInitial || body.avatar_initial || existingRow?.avatar_initial || 'P');
+      const avatarColor = normalizeAvatarColor(body.avatarColor || body.avatar_color || existingRow?.avatar_color, '#7c3aed');
+      const avatarTextColor = normalizeAvatarColor(body.avatarTextColor || body.avatar_text_color || existingRow?.avatar_text_color, '#ffffff');
       const { data, error } = await supabase
         .from('standings_users')
         .upsert({
@@ -415,9 +482,12 @@ async function handleApi(request, response) {
           super_locks: superLocks,
           joined_contests: Array.isArray(existingRow?.joined_contests) ? existingRow.joined_contests : [],
           paid: Boolean(existingRow?.paid),
+          avatar_initial: avatarInitial,
+          avatar_color: avatarColor,
+          avatar_text_color: avatarTextColor,
           updated_at: new Date().toISOString()
         }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, joined_contests, paid')
+        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .single();
       if (error) throw error;
 

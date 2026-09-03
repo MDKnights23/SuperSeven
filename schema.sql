@@ -20,11 +20,23 @@ create table if not exists public.standings_users (
   super_locks jsonb not null default '{}'::jsonb,
   joined_contests jsonb not null default '[]'::jsonb,
   paid boolean not null default false,
+  avatar_initial text not null default 'P',
+  avatar_color text not null default '#7c3aed',
+  avatar_text_color text not null default '#ffffff',
   updated_at timestamptz not null default now()
 );
 
 alter table public.standings_users
   add column if not exists joined_contests jsonb not null default '[]'::jsonb;
+
+alter table public.standings_users
+  add column if not exists avatar_initial text not null default 'P';
+
+alter table public.standings_users
+  add column if not exists avatar_color text not null default '#7c3aed';
+
+alter table public.standings_users
+  add column if not exists avatar_text_color text not null default '#ffffff';
 
 create index if not exists sessions_token_hash_idx on public.sessions(token_hash);
 create index if not exists sessions_expires_at_idx on public.sessions(expires_at);

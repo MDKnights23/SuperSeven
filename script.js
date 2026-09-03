@@ -695,30 +695,43 @@ function getAvatarConfigForEmail(email = currentUserEmail) {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   const fallback = getAvatarDefaults(getDisplayName(email));
   const storageKey = normalizedEmail ? `super7-avatar:${normalizedEmail}` : '';
-  if (!storageKey) {
-    return fallback;
-  }
 
   try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) {
-      return fallback;
+    if (storageKey) {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const baseInitial = typeof parsed.initial === 'string' && parsed.initial.trim() ? normalizeAvatarInitial(parsed.initial) : fallback.initial;
+        const baseColor = typeof parsed.color === 'string' && parsed.color ? parsed.color : fallback.color;
+        const baseTextColor = typeof parsed.textColor === 'string' && parsed.textColor ? parsed.textColor : getContrastTextColor(baseColor);
+        return {
+          initial: baseInitial,
+          color: baseColor,
+          textColor: baseTextColor
+        };
+      }
     }
-    const parsed = JSON.parse(raw);
-    const baseInitial = typeof parsed.initial === 'string' && parsed.initial.trim() ? normalizeAvatarInitial(parsed.initial) : fallback.initial;
-    const baseColor = typeof parsed.color === 'string' && parsed.color ? parsed.color : fallback.color;
-    const baseTextColor = typeof parsed.textColor === 'string' && parsed.textColor ? parsed.textColor : getContrastTextColor(baseColor);
-    return {
-      initial: baseInitial,
-      color: baseColor,
-      textColor: baseTextColor
-    };
+
+    const standingsUsers = loadStandingsUsers();
+    const standingsUser = standingsUsers.find((user) => (user.email || '').trim().toLowerCase() === normalizedEmail);
+    if (standingsUser) {
+      const baseInitial = normalizeAvatarInitial(standingsUser.avatarInitial || standingsUser.avatar_initial || fallback.initial);
+      const baseColor = typeof standingsUser.avatarColor === 'string' && standingsUser.avatarColor ? standingsUser.avatarColor : fallback.color;
+      const baseTextColor = typeof standingsUser.avatarTextColor === 'string' && standingsUser.avatarTextColor ? standingsUser.avatarTextColor : getContrastTextColor(baseColor);
+      return {
+        initial: baseInitial,
+        color: baseColor,
+        textColor: baseTextColor
+      };
+    }
+
+    return fallback;
   } catch {
     return fallback;
   }
 }
 
-function saveAvatarConfig(config, email = currentUserEmail) {
+async function saveAvatarConfig(config, email = currentUserEmail) {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   if (!normalizedEmail) {
     return;
@@ -733,6 +746,22 @@ function saveAvatarConfig(config, email = currentUserEmail) {
   };
 
   localStorage.setItem(`super7-avatar:${normalizedEmail}`, JSON.stringify(avatar));
+
+  try {
+    await fetch('/api/avatar-me', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        initial: avatar.initial,
+        color: avatar.color,
+        textColor: avatar.textColor
+      })
+    });
+  } catch {
+    // keep the local avatar working even if the server sync fails
+  }
+
   return avatar;
 }
 
@@ -787,6 +816,8 @@ async function syncCurrentUserStandingsRowToServer() {
     return;
   }
 
+  const avatar = getAvatarConfigForEmail(currentUserEmail);
+
   try {
     await fetch('/api/standings-me', {
       method: 'PUT',
@@ -796,7 +827,10 @@ async function syncCurrentUserStandingsRowToServer() {
         displayName: getCurrentUserDisplayLabel(),
         picks: myPicks,
         superLocks: superLocks,
-        joinedContests: joinedContests
+        joinedContests: joinedContests,
+        avatarInitial: avatar.initial,
+        avatarColor: avatar.color,
+        avatarTextColor: avatar.textColor
       })
     });
   } catch {
@@ -825,10 +859,19 @@ async function hydrateCurrentUserStateFromServer() {
     superLocks = user.superLocks && typeof user.superLocks === 'object' ? user.superLocks : {};
     joinedContests = Array.isArray(user.joinedContests) ? user.joinedContests : [];
 
+    const avatarInitial = normalizeAvatarInitial(user.avatarInitial || user.avatar_initial || 'P');
+    const avatarColor = normalizeAvatarColor(user.avatarColor || user.avatar_color || '#7c3aed', '#7c3aed');
+    const avatarTextColor = normalizeAvatarColor(user.avatarTextColor || user.avatar_text_color || '#ffffff', '#ffffff');
+
     savePicks();
     saveSuperLocks();
     saveJoinedContests();
     saveDisplayName(user.name, currentUserEmail);
+    localStorage.setItem(`super7-avatar:${(currentUserEmail || '').trim().toLowerCase()}`, JSON.stringify({
+      initial: avatarInitial,
+      color: avatarColor,
+      textColor: avatarTextColor
+    }));
     return true;
   } catch {
     return false;
