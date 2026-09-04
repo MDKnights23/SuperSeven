@@ -439,7 +439,7 @@ const week1Matchups = [
   { away: 'Washington Commanders', home: 'Philadelphia Eagles', homeLine: '-4.5', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
   { away: 'Green Bay Packers', home: 'Minnesota Vikings', homeLine: '-1', day: 'Sun', date: '9/13', time: '3:25 PM CT' },
   { away: 'Dallas Cowboys', home: 'New York Giants', homeLine: '-2.5', day: 'Sun', date: '9/13', time: '7:20 PM CT' },
-  { away: 'Denver Broncos', home: 'Kansas City Chiefs', homeLine: 'OFF', day: 'Mon', date: '9/14', time: '7:15 PM CT', notes: 'Waiting on Mahomes Status' }
+  { away: 'Denver Broncos', home: 'Kansas City Chiefs', homeLine: '-3', day: 'Mon', date: '9/14', time: '7:15 PM CT' }
 ];
 
 function formatSpread(value) {
