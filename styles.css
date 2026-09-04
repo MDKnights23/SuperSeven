@@ -617,6 +617,18 @@ button:hover {
   cursor: not-allowed;
 }
 
+.byes-section {
+  margin-top: 1rem;
+}
+
+.byes-header {
+  margin-bottom: 0.75rem;
+}
+
+.week-bye-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.2fr) minmax(140px, 1fr);
+}
+
 .matchup-row {
   display: flex;
   justify-content: center;
