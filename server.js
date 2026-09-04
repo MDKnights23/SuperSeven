@@ -124,6 +124,31 @@ function sanitizeDisplayName(name, fallbackEmail) {
   return trimmed.slice(0, 40);
 }
 
+function normalizeDisplayNameKey(value) {
+  return sanitizeDisplayName(value, '').trim().toLowerCase();
+}
+
+async function entryNameExists(ownerEmail, displayName, excludeEntryId = null) {
+  const normalizedEmail = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+  const normalizedDisplayName = normalizeDisplayNameKey(displayName);
+  if (!validEmail(normalizedEmail) || !normalizedDisplayName) {
+    return false;
+  }
+
+  let query = supabase
+    .from('user_entries')
+    .select('id, display_name')
+    .eq('owner_email', normalizedEmail);
+  if (excludeEntryId) {
+    query = query.neq('id', excludeEntryId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).some((entry) => normalizeDisplayNameKey(entry.display_name) === normalizedDisplayName);
+}
+
 function normalizeAvatarInitial(value) {
   const cleaned = String(value ?? '').replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
   return cleaned || 'P';
@@ -139,7 +164,10 @@ function normalizeAvatarColor(value, fallback) {
 
 function normalizeStandingsUserRow(row) {
   return {
-    email: row.email,
+    id: row.id,
+    entryId: row.id,
+    ownerEmail: row.owner_email || row.email,
+    email: row.owner_email || row.email,
     name: row.display_name || row.email,
     picks: Array.isArray(row.picks) ? row.picks : [],
     superLocks: row.super_locks && typeof row.super_locks === 'object' ? row.super_locks : {},
@@ -151,37 +179,65 @@ function normalizeStandingsUserRow(row) {
   };
 }
 
-async function ensureStandingsUser(email) {
-  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+function getDefaultAvatarInitial(displayName, fallback = 'P') {
+  return normalizeAvatarInitial(String(displayName || fallback).trim().charAt(0) || fallback);
+}
+
+async function ensureUserEntry(ownerEmail) {
+  const normalizedEmail = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
   if (!validEmail(normalizedEmail)) {
     return;
   }
 
-  const { data: existingUser, error: readError } = await supabase
+  const { data: existingEntries, error: entriesError } = await supabase
+    .from('user_entries')
+    .select('id')
+    .eq('owner_email', normalizedEmail)
+    .limit(1);
+  if (entriesError) throw entriesError;
+
+  if (Array.isArray(existingEntries) && existingEntries.length > 0) {
+    return;
+  }
+
+  const { data: legacyRow, error: legacyError } = await supabase
     .from('standings_users')
-    .select('joined_contests')
+    .select('display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
     .eq('email', normalizedEmail)
     .maybeSingle();
-  if (readError) throw readError;
-
-  const joinedContests = Array.isArray(existingUser?.joined_contests) && existingUser.joined_contests.length
-    ? existingUser.joined_contests
-    : ['super7'];
+  if (legacyError) throw legacyError;
 
   const { error } = await supabase
-    .from('standings_users')
-    .upsert({
-      email: normalizedEmail,
-      display_name: normalizedEmail,
-      picks: [],
-      super_locks: {},
-      joined_contests: joinedContests,
-      avatar_initial: 'P',
-      avatar_color: '#7c3aed',
-      avatar_text_color: '#ffffff',
+    .from('user_entries')
+    .insert({
+      id: crypto.randomUUID(),
+      owner_email: normalizedEmail,
+      display_name: sanitizeDisplayName(legacyRow?.display_name || normalizedEmail, normalizedEmail),
+      picks: Array.isArray(legacyRow?.picks) ? legacyRow.picks : [],
+      super_locks: legacyRow?.super_locks && typeof legacyRow.super_locks === 'object' ? legacyRow.super_locks : {},
+      joined_contests: Array.isArray(legacyRow?.joined_contests) && legacyRow.joined_contests.length ? legacyRow.joined_contests : ['super7'],
+      paid: Boolean(legacyRow?.paid),
+      avatar_initial: normalizeAvatarInitial(legacyRow?.avatar_initial || getDefaultAvatarInitial(legacyRow?.display_name || normalizedEmail)),
+      avatar_color: normalizeAvatarColor(legacyRow?.avatar_color, '#7c3aed'),
+      avatar_text_color: normalizeAvatarColor(legacyRow?.avatar_text_color, '#ffffff'),
       updated_at: new Date().toISOString()
-    }, { onConflict: 'email', ignoreDuplicates: true });
+    });
   if (error) throw error;
+}
+
+async function getUserEntries(ownerEmail) {
+  const normalizedEmail = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+  if (!validEmail(normalizedEmail)) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('user_entries')
+    .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color, updated_at')
+    .eq('owner_email', normalizedEmail)
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(normalizeStandingsUserRow);
 }
 
 async function listCommissionerUsers() {
@@ -226,7 +282,7 @@ async function handleApi(request, response) {
         });
         if (error?.code === '23505') return sendJson(response, 409, { error: 'An account with that email already exists.' });
         if (error) throw error;
-        await ensureStandingsUser(email);
+        await ensureUserEntry(email);
       } else {
         const { data: user, error } = await supabase
           .from('users')
@@ -237,7 +293,7 @@ async function handleApi(request, response) {
         if (!user || !(await verifyPassword(password, user.password_hash))) {
           return sendJson(response, 401, { error: 'Invalid email or password.' });
         }
-        await ensureStandingsUser(email);
+        await ensureUserEntry(email);
       }
 
       return sendJson(response, 200, { email }, { 'Set-Cookie': sessionCookie(await createSession(email)) });
@@ -295,35 +351,132 @@ async function handleApi(request, response) {
         return sendJson(response, 401, { error: 'Not signed in.' });
       }
 
-      const { data: standingsRows, error: standingsError } = await supabase
-        .from('standings_users')
-        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color, updated_at')
+      await ensureUserEntry(session.email);
+
+      const { data: entryRows, error: entriesError } = await supabase
+        .from('user_entries')
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color, updated_at')
         .order('updated_at', { ascending: false });
-      if (standingsError) throw standingsError;
+      if (entriesError) throw entriesError;
 
-      const { data: allUsers, error: usersError } = await supabase
-        .from('users')
-        .select('email')
-        .order('created_at', { ascending: true });
-      if (usersError) throw usersError;
-
-      const byEmail = new Map((standingsRows || []).map((row) => [row.email, normalizeStandingsUserRow(row)]));
-      (allUsers || []).forEach((userRow) => {
-        const email = userRow.email;
-        if (!byEmail.has(email)) {
-          byEmail.set(email, {
-            email,
-            name: email,
-            picks: [],
-            superLocks: {},
-            joinedContests: [],
-            paid: false
-          });
-        }
-      });
-
-      const users = Array.from(byEmail.values());
+      const users = (entryRows || []).map(normalizeStandingsUserRow);
       return sendJson(response, 200, { users });
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/entries-me') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      await ensureUserEntry(session.email);
+      const entries = await getUserEntries(session.email);
+      return sendJson(response, 200, { entries });
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/entries') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const body = await readRequestBody(request);
+      const ownerEmail = session.email;
+      const { data: existingEntries, error: existingError } = await supabase
+        .from('user_entries')
+        .select('id')
+        .eq('owner_email', ownerEmail);
+      if (existingError) throw existingError;
+
+      if ((existingEntries || []).length >= 3) {
+        return sendJson(response, 400, { error: 'Each email address may have at most 3 entries.' });
+      }
+
+      const displayName = sanitizeDisplayName(body.displayName, ownerEmail);
+      if (await entryNameExists(ownerEmail, displayName)) {
+        return sendJson(response, 409, { error: 'That entry name already exists for this email address.' });
+      }
+      const avatarInitial = normalizeAvatarInitial(body.avatarInitial || getDefaultAvatarInitial(displayName || ownerEmail));
+      const avatarColor = normalizeAvatarColor(body.avatarColor, '#7c3aed');
+      const avatarTextColor = normalizeAvatarColor(body.avatarTextColor, '#ffffff');
+
+      const { data, error } = await supabase
+        .from('user_entries')
+        .insert({
+          id: crypto.randomUUID(),
+          owner_email: ownerEmail,
+          display_name: displayName,
+          picks: [],
+          super_locks: {},
+          joined_contests: ['super7'],
+          paid: false,
+          avatar_initial: avatarInitial,
+          avatar_color: avatarColor,
+          avatar_text_color: avatarTextColor,
+          updated_at: new Date().toISOString()
+        })
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        .single();
+      if (error) throw error;
+
+      return sendJson(response, 200, { entry: normalizeStandingsUserRow(data) });
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/entries-delete') {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const body = await readRequestBody(request);
+      const entryId = typeof body.entryId === 'string' ? body.entryId.trim() : '';
+      const entryName = sanitizeDisplayName(body.entryName, '');
+      if (!entryId) {
+        return sendJson(response, 400, { error: 'Entry ID is required.' });
+      }
+
+      const { data: ownerEntries, error: ownerEntriesError } = await supabase
+        .from('user_entries')
+        .select('id')
+        .eq('owner_email', session.email);
+      if (ownerEntriesError) throw ownerEntriesError;
+
+      if ((ownerEntries || []).length <= 1) {
+        return sendJson(response, 400, { error: 'You must keep at least one entry for this email address.' });
+      }
+
+      const { data: targetEntry, error: targetEntryError } = await supabase
+        .from('user_entries')
+        .select('id, owner_email, display_name')
+        .eq('id', entryId)
+        .eq('owner_email', session.email)
+        .maybeSingle();
+      if (targetEntryError) throw targetEntryError;
+      let resolvedEntry = targetEntry;
+
+      if (!resolvedEntry && entryName) {
+        const { data: nameMatch, error: nameMatchError } = await supabase
+          .from('user_entries')
+          .select('id, owner_email, display_name')
+          .eq('owner_email', session.email)
+          .eq('display_name', entryName)
+          .maybeSingle();
+        if (nameMatchError) throw nameMatchError;
+        resolvedEntry = nameMatch;
+      }
+
+      if (!resolvedEntry) {
+        return sendJson(response, 404, { error: 'Could not locate that entry. Refresh the page and try again.' });
+      }
+
+      const { error } = await supabase
+        .from('user_entries')
+        .delete()
+        .eq('id', resolvedEntry.id)
+        .eq('owner_email', session.email);
+      if (error) throw error;
+
+      return sendJson(response, 200, { ok: true, removedEntryId: resolvedEntry.id, removedName: resolvedEntry.display_name });
     }
 
     if (request.method === 'POST' && requestUrl.pathname === '/api/avatar-me') {
@@ -333,14 +486,28 @@ async function handleApi(request, response) {
       }
 
       const body = await readRequestBody(request);
-      const { data: existingRow, error: existingError } = await supabase
-        .from('standings_users')
-        .select('display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
-        .eq('email', session.email)
-        .maybeSingle();
+      await ensureUserEntry(session.email);
+
+      let targetEntryId = typeof body.entryId === 'string' ? body.entryId.trim() : '';
+      let targetQuery = supabase
+        .from('user_entries')
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        .eq('owner_email', session.email);
+      if (targetEntryId) {
+        targetQuery = targetQuery.eq('id', targetEntryId);
+      }
+
+      const { data: targetRows, error: existingError } = await targetQuery.order('updated_at', { ascending: false }).limit(1);
       if (existingError) throw existingError;
+      const existingRow = Array.isArray(targetRows) && targetRows.length ? targetRows[0] : null;
+      if (!existingRow) {
+        return sendJson(response, 404, { error: 'Entry not found.' });
+      }
 
       const displayName = sanitizeDisplayName(existingRow?.display_name || session.email, session.email);
+      if (await entryNameExists(session.email, displayName, existingRow.id)) {
+        return sendJson(response, 409, { error: 'That entry name already exists for this email address.' });
+      }
       const picks = Array.isArray(existingRow?.picks) ? existingRow.picks : [];
       const superLocks = existingRow?.super_locks && typeof existingRow.super_locks === 'object' ? existingRow.super_locks : {};
       const joinedContests = Array.isArray(existingRow?.joined_contests) ? existingRow.joined_contests : ['super7'];
@@ -349,9 +516,10 @@ async function handleApi(request, response) {
       const avatarTextColor = normalizeAvatarColor(body.textColor || body.avatarTextColor || body.avatar_text_color || existingRow?.avatar_text_color, '#ffffff');
 
       const { data, error } = await supabase
-        .from('standings_users')
+        .from('user_entries')
         .upsert({
-          email: session.email,
+          id: existingRow.id,
+          owner_email: session.email,
           display_name: displayName,
           picks,
           super_locks: superLocks,
@@ -360,8 +528,8 @@ async function handleApi(request, response) {
           avatar_color: avatarColor,
           avatar_text_color: avatarTextColor,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        }, { onConflict: 'id' })
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .single();
       if (error) throw error;
 
@@ -375,25 +543,47 @@ async function handleApi(request, response) {
       }
 
       const body = await readRequestBody(request);
+      await ensureUserEntry(session.email);
+
+      let targetEntryId = typeof body.entryId === 'string' ? body.entryId.trim() : '';
+      let targetQuery = supabase
+        .from('user_entries')
+        .select('id, owner_email, paid')
+        .eq('owner_email', session.email);
+      if (targetEntryId) {
+        targetQuery = targetQuery.eq('id', targetEntryId);
+      }
+      const { data: entryRows, error: entryLookupError } = await targetQuery.order('updated_at', { ascending: false }).limit(1);
+      if (entryLookupError) throw entryLookupError;
+      const targetEntry = Array.isArray(entryRows) && entryRows.length ? entryRows[0] : null;
+      if (!targetEntry) {
+        return sendJson(response, 404, { error: 'Entry not found.' });
+      }
+
       const displayName = sanitizeDisplayName(body.displayName, session.email);
+      if (await entryNameExists(session.email, displayName, targetEntry.id)) {
+        return sendJson(response, 409, { error: 'That entry name already exists for this email address.' });
+      }
       const picks = Array.isArray(body.picks) ? body.picks : [];
       const superLocks = body.superLocks && typeof body.superLocks === 'object' ? body.superLocks : {};
       const joinedContests = Array.isArray(body.joinedContests) ? body.joinedContests : [];
 
       const { data, error } = await supabase
-        .from('standings_users')
+        .from('user_entries')
         .upsert({
-          email: session.email,
+          id: targetEntry.id,
+          owner_email: session.email,
           display_name: displayName,
           picks,
           super_locks: superLocks,
           joined_contests: joinedContests,
+          paid: Boolean(targetEntry.paid),
           avatar_initial: normalizeAvatarInitial(body.avatarInitial || body.avatar_initial || 'P'),
           avatar_color: normalizeAvatarColor(body.avatarColor || body.avatar_color, '#7c3aed'),
           avatar_text_color: normalizeAvatarColor(body.avatarTextColor || body.avatar_text_color, '#ffffff'),
           updated_at: new Date().toISOString()
-        }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        }, { onConflict: 'id' })
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .single();
       if (error) throw error;
 
@@ -406,16 +596,10 @@ async function handleApi(request, response) {
         return sendJson(response, 401, { error: 'Not signed in.' });
       }
 
-      await ensureStandingsUser(session.email);
-
-      const { data, error } = await supabase
-        .from('standings_users')
-        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
-        .eq('email', session.email)
-        .single();
-      if (error) throw error;
-
-      return sendJson(response, 200, { user: normalizeStandingsUserRow(data) });
+      await ensureUserEntry(session.email);
+      const entries = await getUserEntries(session.email);
+      const user = entries[0] || null;
+      return sendJson(response, 200, { user, entries });
     }
 
     if (request.method === 'POST' && requestUrl.pathname === '/api/standings-paid') {
@@ -428,22 +612,26 @@ async function handleApi(request, response) {
       }
 
       const body = await readRequestBody(request);
-      const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      if (!validEmail(targetEmail)) {
-        return sendJson(response, 400, { error: 'Valid email is required.' });
+      const isPaid = Boolean(body.isPaid);
+
+      if (typeof body.entryId === 'string' && body.entryId.trim()) {
+        const { error } = await supabase
+          .from('user_entries')
+          .update({ paid: isPaid, updated_at: new Date().toISOString() })
+          .eq('id', body.entryId.trim());
+        if (error) throw error;
+        return sendJson(response, 200, { ok: true });
       }
 
-      const isPaid = Boolean(body.isPaid);
+      const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!validEmail(targetEmail)) {
+        return sendJson(response, 400, { error: 'Entry ID or valid email is required.' });
+      }
+
       const { error } = await supabase
-        .from('standings_users')
-        .upsert({
-          email: targetEmail,
-          display_name: targetEmail,
-          picks: [],
-          super_locks: {},
-          paid: isPaid,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'email' });
+        .from('user_entries')
+        .update({ paid: isPaid, updated_at: new Date().toISOString() })
+        .eq('owner_email', targetEmail);
       if (error) throw error;
 
       return sendJson(response, 200, { ok: true });
@@ -459,29 +647,48 @@ async function handleApi(request, response) {
       }
 
       const body = await readRequestBody(request);
-      const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      if (!validEmail(targetEmail)) {
-        return sendJson(response, 400, { error: 'Valid email is required.' });
-      }
-
       const picks = Array.isArray(body.picks) ? body.picks : [];
       const superLocks = body.superLocks && typeof body.superLocks === 'object' ? body.superLocks : {};
 
-      const { data: existingRow, error: existingError } = await supabase
-        .from('standings_users')
-        .select('display_name, paid, joined_contests, avatar_initial, avatar_color, avatar_text_color')
-        .eq('email', targetEmail)
-        .maybeSingle();
-      if (existingError) throw existingError;
+      let existingRow = null;
+      if (typeof body.entryId === 'string' && body.entryId.trim()) {
+        const { data, error } = await supabase
+          .from('user_entries')
+          .select('id, owner_email, display_name, paid, joined_contests, avatar_initial, avatar_color, avatar_text_color')
+          .eq('id', body.entryId.trim())
+          .maybeSingle();
+        if (error) throw error;
+        existingRow = data;
+      } else {
+        const targetEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+        if (!validEmail(targetEmail)) {
+          return sendJson(response, 400, { error: 'Entry ID or valid email is required.' });
+        }
+        const { data, error } = await supabase
+          .from('user_entries')
+          .select('id, owner_email, display_name, paid, joined_contests, avatar_initial, avatar_color, avatar_text_color')
+          .eq('owner_email', targetEmail)
+          .eq('display_name', sanitizeDisplayName(body.displayName, targetEmail))
+          .maybeSingle();
+        if (error) throw error;
+        existingRow = data;
+      }
+
+      if (!existingRow) {
+        return sendJson(response, 404, { error: 'Entry not found.' });
+      }
+
+      const targetEmail = existingRow.owner_email;
 
       const displayName = sanitizeDisplayName(body.displayName, targetEmail);
       const avatarInitial = normalizeAvatarInitial(body.avatarInitial || body.avatar_initial || existingRow?.avatar_initial || 'P');
       const avatarColor = normalizeAvatarColor(body.avatarColor || body.avatar_color || existingRow?.avatar_color, '#7c3aed');
       const avatarTextColor = normalizeAvatarColor(body.avatarTextColor || body.avatar_text_color || existingRow?.avatar_text_color, '#ffffff');
       const { data, error } = await supabase
-        .from('standings_users')
+        .from('user_entries')
         .upsert({
-          email: targetEmail,
+          id: existingRow.id,
+          owner_email: targetEmail,
           display_name: displayName || existingRow?.display_name || targetEmail,
           picks,
           super_locks: superLocks,
@@ -491,8 +698,8 @@ async function handleApi(request, response) {
           avatar_color: avatarColor,
           avatar_text_color: avatarTextColor,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'email' })
-        .select('email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
+        }, { onConflict: 'id' })
+        .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color')
         .single();
       if (error) throw error;
 

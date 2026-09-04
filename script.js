@@ -16,12 +16,14 @@ const siteStatusBar = document.getElementById('site-status-bar');
 const popupOverlay = document.getElementById('popup-overlay');
 const popupMessage = document.getElementById('popup-message');
 const popupCloseButton = document.getElementById('popup-close-button');
+const popupCancelButton = document.getElementById('popup-cancel-button');
 
 let isSignUpMode = false;
 let currentPage = 'home';
 let selectedContest = null;
 let currentUserEmail = null;
 let currentEditingPlayerName = null;
+let activeEntryId = null;
 let selectedWeek = 1;
 let selectedTeam = null;
 let selectedTeams = [];
@@ -29,6 +31,8 @@ let selectedLock = null;
 let myPicks = loadPicks();
 let superLocks = loadSuperLocks();
 let joinedContests = loadJoinedContests();
+let popupConfirmHandler = null;
+let popupBusy = false;
 
 const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
 const USER_ROLES = {
@@ -66,7 +70,13 @@ function updateLoggedInUserDisplay() {
   }
 
   const role = getCurrentUserRole();
-  loggedInEmail.innerHTML = `${currentUserEmail}<br /><span class="logged-in-role">Role: ${role}</span>`;
+  const ownedEntries = getCurrentUserEntries();
+  const activeEntry = ensureActiveEntryId();
+  const activeEntryName = activeEntry?.name || getCurrentUserDisplayLabel();
+  const activeEntryMarkup = ownedEntries.length > 1
+    ? `<br /><span class="logged-in-active-entry">Active entry: ${escapeHtml(activeEntryName)}</span>`
+    : '';
+  loggedInEmail.innerHTML = `${currentUserEmail}<br /><span class="logged-in-role">Role: ${role}</span>${activeEntryMarkup}`;
 }
 
 const nflBaseSpreads = [
@@ -215,6 +225,68 @@ function normalizeEntryName(value) {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function normalizeEntryId(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizeEntryId(value));
+}
+
+function getServerEntryId(value) {
+  const normalized = normalizeEntryId(value);
+  return isUuid(normalized) ? normalized : null;
+}
+
+function getEntryId(user) {
+  return normalizeEntryId(user?.entryId || user?.id || '');
+}
+
+function getOwnerEmail(user) {
+  const owner = typeof user?.ownerEmail === 'string' && user.ownerEmail.trim()
+    ? user.ownerEmail
+    : user?.email;
+  return typeof owner === 'string' ? owner.trim().toLowerCase() : '';
+}
+
+function isOwnedByCurrentUser(user) {
+  return getOwnerEmail(user) === (currentUserEmail || '').trim().toLowerCase();
+}
+
+function getCurrentUserEntries() {
+  return loadStandingsUsers().filter((user) => isOwnedByCurrentUser(user));
+}
+
+function getEntryById(entryId) {
+  const normalizedId = normalizeEntryId(entryId);
+  if (!normalizedId) {
+    return null;
+  }
+  return loadStandingsUsers().find((user) => getEntryId(user) === normalizedId) || null;
+}
+
+function hydrateLocalStateFromEntry(entry) {
+  myPicks = Array.isArray(entry?.picks) ? entry.picks : [];
+  superLocks = entry?.superLocks && typeof entry.superLocks === 'object' ? entry.superLocks : {};
+  joinedContests = Array.isArray(entry?.joinedContests) ? entry.joinedContests : ['super7'];
+  savePicks();
+  saveSuperLocks();
+  saveJoinedContests();
+}
+
+function ensureActiveEntryId() {
+  const ownedEntries = getCurrentUserEntries();
+  if (!ownedEntries.length) {
+    activeEntryId = null;
+    return null;
+  }
+
+  const existing = ownedEntries.find((entry) => getEntryId(entry) === normalizeEntryId(activeEntryId));
+  const activeEntry = existing || ownedEntries[0];
+  activeEntryId = getEntryId(activeEntry);
+  return activeEntry;
 }
 
 function normalizeTeamName(team) {
@@ -691,9 +763,31 @@ function normalizeAvatarInitial(initial) {
   return cleaned ? cleaned.toUpperCase() : 'P';
 }
 
+function getAvatarConfigForEntry(entry) {
+  const label = typeof entry?.name === 'string' && entry.name.trim()
+    ? entry.name
+    : (typeof entry?.email === 'string' ? entry.email : 'Player');
+  const fallback = getAvatarDefaults(label);
+  const baseColor = typeof entry?.avatarColor === 'string' && entry.avatarColor
+    ? entry.avatarColor
+    : (typeof entry?.avatar_color === 'string' && entry.avatar_color ? entry.avatar_color : fallback.color);
+  return {
+    initial: normalizeAvatarInitial(entry?.avatarInitial || entry?.avatar_initial || fallback.initial),
+    color: baseColor,
+    textColor: typeof entry?.avatarTextColor === 'string' && entry.avatarTextColor
+      ? entry.avatarTextColor
+      : (typeof entry?.avatar_text_color === 'string' && entry.avatar_text_color ? entry.avatar_text_color : getContrastTextColor(baseColor))
+  };
+}
+
 function getAvatarConfigForEmail(email = currentUserEmail) {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   const fallback = getAvatarDefaults(getDisplayName(email));
+  const entryByEmail = loadStandingsUsers().find((user) => getOwnerEmail(user) === normalizedEmail);
+  if (entryByEmail) {
+    return getAvatarConfigForEntry(entryByEmail);
+  }
+
   const storageKey = normalizedEmail ? `super7-avatar:${normalizedEmail}` : '';
 
   try {
@@ -741,13 +835,14 @@ function getAvatarConfigForEmail(email = currentUserEmail) {
   }
 }
 
-async function saveAvatarConfig(config, email = currentUserEmail) {
-  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+async function saveAvatarConfig(config, entry = null) {
+  const targetEntry = entry || ensureActiveEntryId();
+  const normalizedEmail = getOwnerEmail(targetEntry) || (typeof currentUserEmail === 'string' ? currentUserEmail.trim().toLowerCase() : '');
   if (!normalizedEmail) {
     return;
   }
 
-  const fallback = getAvatarDefaults(getDisplayName(email));
+  const fallback = targetEntry ? getAvatarConfigForEntry(targetEntry) : getAvatarDefaults(getDisplayName(currentUserEmail));
   const baseColor = (config && typeof config.color === 'string' && config.color) ? config.color : fallback.color;
   const avatar = {
     initial: normalizeAvatarInitial(config && typeof config.initial === 'string' ? config.initial : fallback.initial),
@@ -755,7 +850,10 @@ async function saveAvatarConfig(config, email = currentUserEmail) {
     textColor: (config && typeof config.textColor === 'string' && config.textColor) ? config.textColor : getContrastTextColor(baseColor)
   };
 
-  localStorage.setItem(`super7-avatar:${normalizedEmail}`, JSON.stringify(avatar));
+  const storageKey = targetEntry && getEntryId(targetEntry)
+    ? `super7-avatar:${getEntryId(targetEntry)}`
+    : `super7-avatar:${normalizedEmail}`;
+  localStorage.setItem(storageKey, JSON.stringify(avatar));
 
   try {
     await fetch('/api/avatar-me', {
@@ -763,6 +861,7 @@ async function saveAvatarConfig(config, email = currentUserEmail) {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({
+        entryId: getServerEntryId(targetEntry ? getEntryId(targetEntry) : ''),
         initial: avatar.initial,
         color: avatar.color,
         textColor: avatar.textColor
@@ -787,6 +886,9 @@ function loadStandingsUsers() {
 
   return [
     {
+      id: 'local-primary',
+      entryId: 'local-primary',
+      ownerEmail: currentUserEmail,
       email: currentUserEmail,
       name: getDisplayName(currentUserEmail),
       picks: myPicks,
@@ -802,18 +904,19 @@ function saveStandingsUsers(users) {
   localStorage.setItem('super7-standings-users', JSON.stringify(normalizedUsers));
 
   normalizedUsers.forEach((user) => {
-    const email = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
-    if (!email) {
+    const avatar = getAvatarConfigForEntry(user);
+    const entryId = getEntryId(user);
+    const ownerEmail = getOwnerEmail(user);
+    if (entryId) {
+      localStorage.setItem(`super7-avatar:${entryId}`, JSON.stringify(avatar));
       return;
     }
 
-    const avatar = {
-      initial: normalizeAvatarInitial(user.avatarInitial || user.avatar_initial || getAvatarDefaults(user.name || email).initial),
-      color: (typeof user.avatarColor === 'string' && user.avatarColor) ? user.avatarColor : ((typeof user.avatar_color === 'string' && user.avatar_color) ? user.avatar_color : getAvatarDefaults(user.name || email).color),
-      textColor: (typeof user.avatarTextColor === 'string' && user.avatarTextColor) ? user.avatarTextColor : ((typeof user.avatar_text_color === 'string' && user.avatar_text_color) ? user.avatar_text_color : getContrastTextColor((typeof user.avatarColor === 'string' && user.avatarColor) ? user.avatarColor : ((typeof user.avatar_color === 'string' && user.avatar_color) ? user.avatar_color : getAvatarDefaults(user.name || email).color)))
-    };
+    if (!ownerEmail) {
+      return;
+    }
 
-    localStorage.setItem(`super7-avatar:${email}`, JSON.stringify(avatar));
+    localStorage.setItem(`super7-avatar:${ownerEmail}`, JSON.stringify(avatar));
   });
 }
 
@@ -829,7 +932,15 @@ async function refreshStandingsUsersFromServer() {
     }
 
     const payload = await response.json();
-    const users = Array.isArray(payload.users) ? payload.users : [];
+    const users = Array.isArray(payload.users)
+      ? payload.users.map((user) => ({
+          ...user,
+          id: getEntryId(user) || '',
+          entryId: getEntryId(user) || '',
+          ownerEmail: getOwnerEmail(user),
+          email: getOwnerEmail(user) || user.email
+        }))
+      : [];
     saveStandingsUsers(users);
     return users;
   } catch {
@@ -838,11 +949,12 @@ async function refreshStandingsUsersFromServer() {
 }
 
 async function syncCurrentUserStandingsRowToServer() {
-  if (!currentUserEmail) {
+  const activeEntry = ensureActiveEntryId();
+  if (!currentUserEmail || !activeEntry) {
     return;
   }
 
-  const avatar = getAvatarConfigForEmail(currentUserEmail);
+  const avatar = getAvatarConfigForEntry(activeEntry);
 
   try {
     await fetch('/api/standings-me', {
@@ -850,7 +962,8 @@ async function syncCurrentUserStandingsRowToServer() {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({
-        displayName: getCurrentUserDisplayLabel(),
+        entryId: getServerEntryId(getEntryId(activeEntry)),
+        displayName: activeEntry.name || getCurrentUserDisplayLabel(),
         picks: myPicks,
         superLocks: superLocks,
         joinedContests: joinedContests,
@@ -876,28 +989,25 @@ async function hydrateCurrentUserStateFromServer() {
     }
 
     const payload = await response.json();
-    const user = payload?.user;
-    if (!user) {
+    const entries = Array.isArray(payload?.entries) ? payload.entries : (payload?.user ? [payload.user] : []);
+    if (!entries.length) {
       return false;
     }
 
-    myPicks = Array.isArray(user.picks) ? user.picks : [];
-    superLocks = user.superLocks && typeof user.superLocks === 'object' ? user.superLocks : {};
-    joinedContests = Array.isArray(user.joinedContests) ? user.joinedContests : [];
-
-    const avatarInitial = normalizeAvatarInitial(user.avatarInitial || user.avatar_initial || 'P');
-    const avatarColor = normalizeAvatarColor(user.avatarColor || user.avatar_color || '#7c3aed', '#7c3aed');
-    const avatarTextColor = normalizeAvatarColor(user.avatarTextColor || user.avatar_text_color || '#ffffff', '#ffffff');
-
-    savePicks();
-    saveSuperLocks();
-    saveJoinedContests();
-    saveDisplayName(user.name, currentUserEmail);
-    localStorage.setItem(`super7-avatar:${(currentUserEmail || '').trim().toLowerCase()}`, JSON.stringify({
-      initial: avatarInitial,
-      color: avatarColor,
-      textColor: avatarTextColor
+    const existingUsers = loadStandingsUsers().filter((user) => !isOwnedByCurrentUser(user));
+    const normalizedEntries = entries.map((entry) => ({
+      ...entry,
+      id: getEntryId(entry),
+      entryId: getEntryId(entry),
+      ownerEmail: getOwnerEmail(entry),
+      email: getOwnerEmail(entry)
     }));
+    saveStandingsUsers([...normalizedEntries, ...existingUsers]);
+
+    const activeEntry = normalizedEntries.find((entry) => getEntryId(entry) === normalizeEntryId(activeEntryId)) || normalizedEntries[0];
+    activeEntryId = getEntryId(activeEntry);
+    hydrateLocalStateFromEntry(activeEntry);
+    saveDisplayName(activeEntry.name, currentUserEmail);
     return true;
   } catch {
     return false;
@@ -937,57 +1047,53 @@ function pruneStandingsProfilesToOwner(keepEmail = COMMISSIONER_EMAIL) {
 }
 
 function syncCurrentUserStandingsRow() {
+  const activeEntry = ensureActiveEntryId();
+  if (!activeEntry) {
+    return;
+  }
+
   const standingsUsers = loadStandingsUsers();
-  const currentUserName = getCurrentUserDisplayLabel();
-  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
-  const currentUserNameNormalized = (currentUserName || '').trim().toLowerCase();
-  const livePicksJson = JSON.stringify(myPicks);
-  const liveSuperLocksJson = JSON.stringify(superLocks);
-
-  const matchingIndices = standingsUsers
-    .map((user, index) => {
-      const userNameNormalized = (user.name || '').trim().toLowerCase();
-      const userEmailNormalized = (user.email || '').trim().toLowerCase();
-      const userPicksJson = JSON.stringify(Array.isArray(user.picks) ? user.picks : []);
-      const userSuperLocksJson = JSON.stringify(user.superLocks || {});
-      const matchesIdentity = userEmailNormalized === currentUserEmailNormalized || userNameNormalized === currentUserNameNormalized;
-      const matchesLiveState = userPicksJson === livePicksJson && userSuperLocksJson === liveSuperLocksJson;
-      return matchesIdentity || matchesLiveState ? index : -1;
-    })
-    .filter((index) => index >= 0);
-
-  const currentUserIndex = matchingIndices[0] ?? -1;
+  const activeEntryIdNormalized = getEntryId(activeEntry);
+  const currentUserIndex = standingsUsers.findIndex((user) => getEntryId(user) === activeEntryIdNormalized);
 
   const currentUserRecord = {
+    ...activeEntry,
+    id: activeEntryIdNormalized,
+    entryId: activeEntryIdNormalized,
+    ownerEmail: currentUserEmail,
     email: currentUserEmail,
-    name: currentUserName,
+    name: activeEntry.name || getCurrentUserDisplayLabel(),
     picks: myPicks,
     superLocks: superLocks,
     joinedContests: joinedContests,
     paid: Boolean(currentUserIndex >= 0 ? standingsUsers[currentUserIndex].paid : false)
   };
 
-  const updatedStandingsUsers = standingsUsers.filter((_, index) => !matchingIndices.includes(index));
-  updatedStandingsUsers.unshift(currentUserRecord);
+  const updatedStandingsUsers = standingsUsers.slice();
+  if (currentUserIndex >= 0) {
+    updatedStandingsUsers[currentUserIndex] = currentUserRecord;
+  } else {
+    updatedStandingsUsers.unshift(currentUserRecord);
+  }
   saveStandingsUsers(updatedStandingsUsers);
   syncCurrentUserStandingsRowToServer();
 }
 
-async function setPaidStatusForStandingsUser(userName, isPaid) {
+async function setPaidStatusForStandingsUser(entryId, isPaid) {
   const standingsUsers = loadStandingsUsers();
-  const userIndex = standingsUsers.findIndex((user) => user.name === userName);
+  const normalizedEntryId = getServerEntryId(entryId);
+  const userIndex = standingsUsers.findIndex((user) => getEntryId(user) === normalizedEntryId);
   if (userIndex < 0) {
     return;
   }
 
-  const userEmail = standingsUsers[userIndex].email;
-  if (userEmail) {
+  if (normalizedEntryId) {
     try {
       const response = await fetch('/api/standings-paid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ email: userEmail, isPaid })
+        body: JSON.stringify({ entryId: normalizedEntryId, isPaid })
       });
       if (response.ok) {
         await refreshStandingsUsersFromServer();
@@ -1005,9 +1111,10 @@ async function setPaidStatusForStandingsUser(userName, isPaid) {
   saveStandingsUsers(standingsUsers);
 }
 
-async function saveStandingsUserPicksToServer(targetEmail, displayName, picks, superLocks) {
+async function saveStandingsUserPicksToServer(entryId, targetEmail, displayName, picks, superLocks) {
+  const normalizedEntryId = getServerEntryId(entryId);
   const email = typeof targetEmail === 'string' ? targetEmail.trim().toLowerCase() : '';
-  if (!email) {
+  if (!normalizedEntryId && !email) {
     return false;
   }
 
@@ -1017,6 +1124,7 @@ async function saveStandingsUserPicksToServer(targetEmail, displayName, picks, s
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({
+        entryId: normalizedEntryId || undefined,
         email,
         displayName,
         picks,
@@ -1036,6 +1144,10 @@ async function saveStandingsUserPicksToServer(targetEmail, displayName, picks, s
 }
 
 function getCurrentUserDisplayLabel() {
+  const activeEntry = ensureActiveEntryId();
+  if (activeEntry && activeEntry.name) {
+    return activeEntry.name;
+  }
   return getDisplayName(currentUserEmail);
 }
 
@@ -1133,7 +1245,12 @@ function canEditPicksForWeek(week, email = currentUserEmail, playerId = 'me') {
     return true;
   }
 
-  return playerId === 'me';
+  const targetEntry = getEntryById(playerId);
+  if (!targetEntry) {
+    return normalizeEntryId(playerId) === normalizeEntryId(activeEntryId);
+  }
+
+  return getOwnerEmail(targetEntry) === (email || '').trim().toLowerCase();
 }
 
 function getMatchupForPick(pick) {
@@ -1214,12 +1331,10 @@ function getPickOutcome(pick, matchup) {
 }
 
 function getStandingsRows() {
-  const currentUserName = getCurrentUserDisplayLabel();
-  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
-  const currentUserNameNormalized = (currentUserName || '').trim().toLowerCase();
+  const activeEntry = ensureActiveEntryId();
+  const activeId = getEntryId(activeEntry);
   const standingsUsers = loadStandingsUsers().map((user) => {
-    const userNameNormalized = (user.name || '').trim().toLowerCase();
-    if (userNameNormalized !== currentUserNameNormalized && userNameNormalized !== currentUserEmailNormalized) {
+    if (!activeId || getEntryId(user) !== activeId) {
       return user;
     }
 
@@ -1278,8 +1393,10 @@ function getStandingsRows() {
     });
 
     return {
+      id: getEntryId(user),
       name: user.name,
       email: user.email || '',
+      ownerEmail: getOwnerEmail(user),
       points: Number(points.toFixed(1)),
       correct,
       pushes,
@@ -1436,7 +1553,7 @@ function updateWeekZeroPickedTeam(week, team, choice) {
   }
 }
 
-async function saveWeekPicks(playerName = null) {
+async function saveWeekPicks(playerId = null) {
   selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, selectedTeams);
   const weekData = getWeekData(selectedWeek);
   if (!weekData) {
@@ -1515,56 +1632,90 @@ async function saveWeekPicks(playerName = null) {
       };
     });
 
-  const targetName = playerName || getCurrentUserDisplayLabel();
-  if (playerName && playerName !== getCurrentUserDisplayLabel()) {
-    const standingsUsers = loadStandingsUsers();
-    const userIndex = standingsUsers.findIndex((user) => user.name === targetName || user.email === targetName);
-    const targetUser = userIndex >= 0 ? standingsUsers[userIndex] : { name: targetName, picks: [], superLocks: {} };
-    targetUser.picks = (Array.isArray(targetUser.picks) ? targetUser.picks : []).filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
-    targetUser.superLocks = targetUser.superLocks || {};
-    if (selectedLock) {
-      targetUser.superLocks[selectedWeek] = selectedLock;
-    } else {
-      delete targetUser.superLocks[selectedWeek];
-    }
-    if (userIndex >= 0) {
-      standingsUsers[userIndex] = targetUser;
-    } else {
-      standingsUsers.push(targetUser);
-    }
-    saveStandingsUsers(standingsUsers);
+  const standingsUsers = loadStandingsUsers();
+  const explicitTarget = playerId ? standingsUsers.find((user) => getEntryId(user) === playerId || user.name === playerId) : null;
+  const activeEntry = ensureActiveEntryId();
+  const targetUser = explicitTarget || activeEntry;
+  if (!targetUser) {
+    showMessage('Could not determine which entry to save.');
+    return false;
+  }
 
-    let serverSaved = false;
-    if (isCurrentUserCommissioner() && targetUser.email) {
-      serverSaved = await saveStandingsUserPicksToServer(
-        targetUser.email,
-        targetUser.name,
-        targetUser.picks,
-        targetUser.superLocks
-      );
-    }
+  const targetEntryId = getEntryId(targetUser);
+  const targetName = targetUser.name || getCurrentUserDisplayLabel();
+  const updatedPicks = (Array.isArray(targetUser.picks) ? targetUser.picks : []).filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
+  const updatedSuperLocks = {
+    ...(targetUser.superLocks && typeof targetUser.superLocks === 'object' ? targetUser.superLocks : {})
+  };
+  if (selectedLock) {
+    updatedSuperLocks[selectedWeek] = selectedLock;
+  } else {
+    delete updatedSuperLocks[selectedWeek];
+  }
 
-    if (targetUser.email && !serverSaved) {
-      showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek} locally. Server sync failed.`);
-      return true;
-    }
+  const isActiveTarget = targetEntryId && targetEntryId === normalizeEntryId(activeEntryId);
+  if (isActiveTarget) {
+    myPicks = updatedPicks;
+    superLocks = updatedSuperLocks;
+    savePicks();
+    saveSuperLocks();
+  }
 
-    showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek}.`);
+  const userIndex = standingsUsers.findIndex((user) => getEntryId(user) === targetEntryId);
+  const mergedUser = {
+    ...targetUser,
+    picks: updatedPicks,
+    superLocks: updatedSuperLocks
+  };
+  if (userIndex >= 0) {
+    standingsUsers[userIndex] = mergedUser;
+  } else {
+    standingsUsers.unshift(mergedUser);
+  }
+  saveStandingsUsers(standingsUsers);
+
+  let serverSaved = false;
+  if (isOwnedByCurrentUser(mergedUser)) {
+    try {
+      const avatar = getAvatarConfigForEntry(mergedUser);
+      const response = await fetch('/api/standings-me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          entryId: getServerEntryId(targetEntryId),
+          displayName: mergedUser.name,
+          picks: updatedPicks,
+          superLocks: updatedSuperLocks,
+          joinedContests: Array.isArray(mergedUser.joinedContests) ? mergedUser.joinedContests : ['super7'],
+          avatarInitial: avatar.initial,
+          avatarColor: avatar.color,
+          avatarTextColor: avatar.textColor
+        })
+      });
+      serverSaved = response.ok;
+    } catch {
+      serverSaved = false;
+    }
+  } else if (isCurrentUserCommissioner() && targetEntryId) {
+    serverSaved = await saveStandingsUserPicksToServer(
+      targetEntryId,
+      mergedUser.email,
+      mergedUser.name,
+      updatedPicks,
+      updatedSuperLocks
+    );
+  }
+
+  if ((isOwnedByCurrentUser(mergedUser) || targetEntryId) && !serverSaved) {
+    showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek} locally. Server sync failed.`);
     return true;
   }
 
-  myPicks = myPicks.filter((pick) => pick.week !== selectedWeek).concat(picksForWeek);
-  savePicks();
-
-  if (selectedLock) {
-    superLocks[selectedWeek] = selectedLock;
-  } else {
-    delete superLocks[selectedWeek];
+  if (isActiveTarget) {
+    syncCurrentUserStandingsRow();
   }
-  saveSuperLocks();
-  syncCurrentUserStandingsRow();
-
-  showMessage(`Saved ${selectedTeams.length} picks for Week ${selectedWeek}.`);
+  showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek}.`);
   return true;
 }
 
@@ -1713,7 +1864,10 @@ function escapeHtml(value) {
 function getAvatarMarkup(player, fallbackLabel = 'P') {
   const candidateEmail = typeof player?.email === 'string' && player.email.trim() ? player.email.trim() : (typeof player?.name === 'string' && player.name.includes('@') ? player.name : '');
   const sourceEmail = candidateEmail || currentUserEmail;
-  const avatarConfig = sourceEmail ? getAvatarConfigForEmail(sourceEmail) : getAvatarDefaults(typeof player?.name === 'string' ? player.name : fallbackLabel);
+  const hasEntryAvatar = player && (getEntryId(player) || player.avatarInitial || player.avatarColor || player.avatarTextColor || player.avatar_initial || player.avatar_color || player.avatar_text_color);
+  const avatarConfig = hasEntryAvatar
+    ? getAvatarConfigForEntry(player)
+    : (sourceEmail ? getAvatarConfigForEmail(sourceEmail) : getAvatarDefaults(typeof player?.name === 'string' ? player.name : fallbackLabel));
   const label = typeof player?.name === 'string' && player.name.trim() ? player.name.trim() : (sourceEmail ? getDisplayName(sourceEmail) : fallbackLabel);
   const initial = avatarConfig.initial || getAvatarDefaults(label).initial;
   const tooltip = escapeHtml(typeof player?.email === 'string' && player.email.trim() ? player.email : label);
@@ -1725,9 +1879,9 @@ function getLockedAvatarMarkup() {
 }
 
 function getHomePageSelectionMarkup(player, pick) {
-  const playerEmail = typeof player?.email === 'string' ? player.email.trim().toLowerCase() : '';
+  const playerEmail = getOwnerEmail(player);
   const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
-  const currentPlayerView = Boolean(playerEmail && playerEmail === currentUserEmailNormalized) || (typeof player?.name === 'string' && normalizeEntryName(player.name) === normalizeEntryName(getCurrentUserDisplayLabel()));
+  const currentPlayerView = Boolean(playerEmail && playerEmail === currentUserEmailNormalized);
   const canReveal = Boolean(pick) && canRevealPickForViewer(pick, {
     isCurrentPlayerView: currentPlayerView,
     isCommissioner: isCurrentUserCommissioner(),
@@ -1936,16 +2090,43 @@ function renderNewsPage() {
 
 function renderMyInfoPage() {
   pageTitle.textContent = 'My Info';
-  pageText.textContent = 'Update how your name appears in the standings.';
+  pageText.textContent = 'Manage your entries, name, and avatar settings.';
   updateSiteStatusBar();
 
-  const currentName = getDisplayName(currentUserEmail);
-  const avatarConfig = getAvatarConfigForEmail(currentUserEmail);
+  const ownedEntries = getCurrentUserEntries();
+  const activeEntry = ensureActiveEntryId() || ownedEntries[0];
+  if (!activeEntry) {
+    pageBody.innerHTML = '<p class="help-text">No entries found for your account yet.</p>';
+    return;
+  }
+
+  const currentName = activeEntry.name || getDisplayName(currentUserEmail);
+  const avatarConfig = getAvatarConfigForEntry(activeEntry);
   pageBody.innerHTML = `
     <div class="contest-card">
       <div class="contest-card-header">
-        <h2>Standings name</h2>
-        <p>Your name defaults to your email address and can be changed here.</p>
+        <h2>Entry profile</h2>
+        <p>Create extra entries and customize each entry's display name and avatar.</p>
+      </div>
+      <div class="entry-select-wrap">
+        <div class="entry-select-field">
+          <label for="entry-select">Active entry</label>
+          <select id="entry-select">
+            ${ownedEntries.map((entry) => {
+              const entryId = getEntryId(entry);
+              const selected = entryId === getEntryId(activeEntry) ? 'selected' : '';
+              const fullLabel = String(entry.name || entry.email || 'Entry');
+              const displayLabel = fullLabel.length > 50 ? fullLabel.slice(0, 50) : fullLabel;
+              return `<option value="${escapeHtml(entryId)}" ${selected}>${escapeHtml(displayLabel)}</option>`;
+            }).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="button-row">
+        <button type="button" class="secondary-button" id="add-entry-button">Add Entry</button>
+      </div>
+      <div class="button-row">
+        <button type="button" class="secondary-button" id="remove-entry-button">Remove Entry</button>
       </div>
       <div class="avatar-preview-wrap">
         <span class="player-avatar avatar-preview" style="background:${avatarConfig.color}; color:${avatarConfig.textColor};">${escapeHtml(avatarConfig.initial)}</span>
@@ -1976,9 +2157,132 @@ function renderMyInfoPage() {
     </div>
   `;
 
+  const entrySelect = pageBody.querySelector('#entry-select');
+  if (entrySelect) {
+    entrySelect.addEventListener('change', function () {
+      const selectedEntry = getEntryById(entrySelect.value);
+      if (!selectedEntry || !isOwnedByCurrentUser(selectedEntry)) {
+        return;
+      }
+      activeEntryId = getEntryId(selectedEntry);
+      hydrateLocalStateFromEntry(selectedEntry);
+      updateLoggedInUserDisplay();
+      renderMyInfoPage();
+    });
+  }
+
+  const addEntryButton = pageBody.querySelector('#add-entry-button');
+  if (addEntryButton) {
+    addEntryButton.addEventListener('click', async function () {
+      const latestOwnedEntries = getCurrentUserEntries();
+      if (latestOwnedEntries.length >= 3) {
+        showPopupMessage('A single email can only have a maximum of 3 entries. Please use an existing entry or remove one before adding another.');
+        return;
+      }
+
+      const baseName = (getCurrentUserDisplayLabel() || currentUserEmail || 'Entry').replace(/\s+\d+$/, '').trim();
+      let proposedName = `${baseName} ${latestOwnedEntries.length + 1}`;
+      const existingNames = new Set(latestOwnedEntries.map((entry) => normalizeEntryName(entry.name || '')));
+      let suffix = latestOwnedEntries.length + 1;
+      while (existingNames.has(normalizeEntryName(proposedName))) {
+        suffix += 1;
+        proposedName = `${baseName} ${suffix}`;
+      }
+
+      try {
+        const response = await fetch('/api/entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ displayName: proposedName })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Unable to create a new entry.');
+        }
+
+        await refreshStandingsUsersFromServer();
+        const newEntry = payload.entry || getCurrentUserEntries()[0];
+        activeEntryId = getEntryId(newEntry);
+        if (newEntry) {
+          hydrateLocalStateFromEntry(newEntry);
+        }
+        updateLoggedInUserDisplay();
+        showMessage('New entry created.');
+        renderMyInfoPage();
+      } catch (error) {
+        if ((error.message || '').toLowerCase().includes('maximum of 3 entries')) {
+          showPopupMessage('A single email can only have a maximum of 3 entries. Please use an existing entry or remove one before adding another.');
+        } else if ((error.message || '').toLowerCase().includes('already exists')) {
+          showPopupMessage('That entry name is already being used by another entry on this email. Choose a unique name and try again.');
+        } else {
+          showMessage(error.message);
+        }
+      }
+    });
+  }
+
+  const removeEntryButton = pageBody.querySelector('#remove-entry-button');
+  if (removeEntryButton) {
+    removeEntryButton.addEventListener('click', async function () {
+      const latestOwnedEntries = getCurrentUserEntries();
+      if (latestOwnedEntries.length <= 1) {
+        showPopupMessage('You must keep at least one entry for this email address.');
+        return;
+      }
+
+      const selectedEntry = ensureActiveEntryId() || activeEntry;
+      const selectedEntryId = getServerEntryId(getEntryId(selectedEntry));
+      if (!selectedEntryId) {
+        showPopupMessage('Unable to determine which entry to remove.');
+        return;
+      }
+
+      const entryName = selectedEntry.name || 'Entry';
+      showConfirmPopup({
+        title: 'Remove Entry',
+        message: `Remove the entry "${entryName}"? This will delete its picks and avatar. This cannot be undone.`,
+        confirmText: 'Remove Entry',
+        onConfirm: async function () {
+          try {
+            const response = await fetch('/api/entries-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ entryId: selectedEntryId, entryName: entryName })
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+              throw new Error(payload.error || 'Unable to remove entry.');
+            }
+
+            activeEntryId = null;
+            await refreshStandingsUsersFromServer();
+            const remainingEntries = getCurrentUserEntries();
+            const nextActiveEntry = remainingEntries[0] || null;
+            if (nextActiveEntry) {
+              activeEntryId = getEntryId(nextActiveEntry);
+              hydrateLocalStateFromEntry(nextActiveEntry);
+            }
+            updateLoggedInUserDisplay();
+            showMessage('Entry removed.');
+            renderMyInfoPage();
+            return true;
+          } catch (error) {
+            if ((error.message || '').toLowerCase().includes('at least one entry')) {
+              throw new Error('You must keep at least one entry for this email address.');
+            }
+
+            throw new Error(error.message || 'Unable to remove entry.');
+          }
+        }
+      });
+    });
+  }
+
   const form = pageBody.querySelector('#display-name-form');
   if (form) {
-    form.addEventListener('submit', function (event) {
+    form.addEventListener('submit', async function (event) {
       event.preventDefault();
       const nameInput = pageBody.querySelector('#display-name');
       const initialInput = pageBody.querySelector('#avatar-initial');
@@ -1988,16 +2292,76 @@ function renderMyInfoPage() {
         return;
       }
 
-      saveDisplayName(nameInput.value, currentUserEmail);
-      saveAvatarConfig({
+      const updatedName = (nameInput.value || '').trim() || (currentUserEmail || 'Entry');
+      const duplicateName = loadStandingsUsers().some((user) => {
+        const sameEntry = getEntryId(user) === getEntryId(activeEntry);
+        const sameOwner = isOwnedByCurrentUser(user);
+        return sameOwner && !sameEntry && normalizeEntryName(user.name || '') === normalizeEntryName(updatedName);
+      });
+      if (duplicateName) {
+        showPopupMessage('That entry name is already being used by another entry on this email. Choose a unique name and try again.');
+        return;
+      }
+
+      const avatar = {
         initial: initialInput.value,
         color: colorInput.value,
         textColor: textColorInput.value
-      }, currentUserEmail);
-      syncCurrentUserStandingsRow();
-      updateLoggedInUserDisplay();
-      showMessage('Profile updated.');
-      renderMyInfoPage();
+      };
+
+      const standingsUsers = loadStandingsUsers();
+      const activeIndex = standingsUsers.findIndex((user) => getEntryId(user) === getEntryId(activeEntry));
+      if (activeIndex >= 0) {
+        standingsUsers[activeIndex] = {
+          ...standingsUsers[activeIndex],
+          name: updatedName,
+          avatarInitial: normalizeAvatarInitial(avatar.initial),
+          avatarColor: avatar.color,
+          avatarTextColor: avatar.textColor
+        };
+        saveStandingsUsers(standingsUsers);
+      }
+
+      if (getEntryId(activeEntry) === normalizeEntryId(activeEntryId)) {
+        saveDisplayName(updatedName, currentUserEmail);
+      }
+
+      try {
+        const response = await fetch('/api/standings-me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            entryId: getServerEntryId(getEntryId(activeEntry)),
+            displayName: updatedName,
+            picks: Array.isArray(activeEntry.picks) ? activeEntry.picks : myPicks,
+            superLocks: activeEntry.superLocks || superLocks,
+            joinedContests: Array.isArray(activeEntry.joinedContests) ? activeEntry.joinedContests : joinedContests,
+            avatarInitial: normalizeAvatarInitial(avatar.initial),
+            avatarColor: avatar.color,
+            avatarTextColor: avatar.textColor
+          })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Unable to save profile.');
+        }
+
+        await refreshStandingsUsersFromServer();
+        const syncedEntry = getEntryById(getEntryId(activeEntry));
+        if (syncedEntry && getEntryId(syncedEntry) === normalizeEntryId(activeEntryId)) {
+          hydrateLocalStateFromEntry(syncedEntry);
+        }
+        updateLoggedInUserDisplay();
+        showMessage('Profile updated.');
+        renderMyInfoPage();
+      } catch (error) {
+        if ((error.message || '').toLowerCase().includes('already exists')) {
+          showPopupMessage('That entry name is already being used by another entry on this email. Choose a unique name and try again.');
+        } else {
+          showMessage(error.message);
+        }
+      }
     });
   }
 }
@@ -2007,19 +2371,41 @@ function renderSuper7Contest() {
   const currentWeek = getCurrentContestWeek();
   const currentUserLabel = getCurrentUserDisplayLabel();
   const players = (() => {
-    const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
-    if (isCurrentUserCommissioner()) {
-      const otherUsers = loadStandingsUsers().filter((user) => user.name !== currentUserLabel);
-      otherUsers.forEach((user) => {
-        list.push({
-          id: user.name,
-          label: user.name,
-          picks: Array.isArray(user.picks) ? user.picks : [],
-          superLocks: user.superLocks || {}
-        });
+    const standingsUsers = loadStandingsUsers();
+    const ownedEntries = standingsUsers
+      .filter((user) => isOwnedByCurrentUser(user))
+      .map((user) => {
+        const entryId = getEntryId(user);
+        const isActiveEntry = entryId === normalizeEntryId(activeEntryId);
+        return {
+          id: entryId,
+          label: user.name || currentUserLabel || 'You',
+          picks: isActiveEntry ? myPicks : (Array.isArray(user.picks) ? user.picks : []),
+          superLocks: isActiveEntry ? superLocks : (user.superLocks || {}),
+          ownerEmail: getOwnerEmail(user)
+        };
       });
+
+    const fallbackEntryId = normalizeEntryId(activeEntryId) || 'local-primary';
+    const ownList = ownedEntries.length
+      ? ownedEntries
+      : [{ id: fallbackEntryId, label: currentUserLabel || 'You', picks: myPicks, superLocks, ownerEmail: (currentUserEmail || '').trim().toLowerCase() }];
+
+    if (!isCurrentUserCommissioner()) {
+      return ownList;
     }
-    return list;
+
+    const otherEntries = standingsUsers
+      .filter((user) => !isOwnedByCurrentUser(user))
+      .map((user) => ({
+        id: getEntryId(user),
+        label: user.name,
+        picks: Array.isArray(user.picks) ? user.picks : [],
+        superLocks: user.superLocks || {},
+        ownerEmail: getOwnerEmail(user)
+      }));
+
+    return ownList.concat(otherEntries);
   })();
 
   const allAvailableWeeks = Array.from({ length: 19 }, (_, index) => index);
@@ -2147,8 +2533,8 @@ function renderSuper7Contest() {
   if (weekFilter) {
     weekFilter.addEventListener('change', function () {
       selectedWeek = Number(weekFilter.value);
-      const player = players.find((entry) => entry.id === (currentEditingPlayerName || 'me')) || players[0];
-      currentEditingPlayerName = player.label;
+      const player = players.find((entry) => entry.id === currentEditingPlayerName) || activePlayer || players[0];
+      currentEditingPlayerName = player.id;
       selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => getPickSelectionKey(pick)));
       selectedLock = normalizeSelectedLockForWeek(selectedWeek, player.superLocks?.[selectedWeek] || null, selectedTeams);
       renderSuper7Contest();
@@ -2160,7 +2546,7 @@ function renderSuper7Contest() {
     playerFilter.addEventListener('change', function () {
       const chosenPlayerId = playerFilter.value;
       const player = players.find((entry) => entry.id === chosenPlayerId) || players[0];
-      currentEditingPlayerName = chosenPlayerId === 'me' ? null : player.label;
+      currentEditingPlayerName = player.id;
       selectedWeek = Number(weekFilter?.value || selectedWeek || currentWeek);
       selectedTeams = normalizeSelectedTeamsForWeek(selectedWeek, (player.picks || []).filter((pick) => pick.week === selectedWeek).map((pick) => getPickSelectionKey(pick)));
       selectedLock = normalizeSelectedLockForWeek(selectedWeek, player.superLocks?.[selectedWeek] || null, selectedTeams);
@@ -2195,7 +2581,7 @@ function renderSuper7Contest() {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
         return;
       }
-      const result = await saveWeekPicks(currentEditingPlayerName);
+      const result = await saveWeekPicks(currentEditingPlayerName || activePlayer.id);
       if (result === false) {
         showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
         return;
@@ -2310,7 +2696,7 @@ async function renderNewsPage() {
               <td>${row.superLockRecord}</td>
               <td>
                 ${isCommissioner
-                  ? `<button type="button" class="paid-toggle-button result-mark ${row.isPaid ? 'correct' : 'incorrect'}" data-user-name="${row.name}" aria-label="Toggle paid status for ${row.name}">${row.isPaid ? '✅' : '❌'}</button>`
+                  ? `<button type="button" class="paid-toggle-button result-mark ${row.isPaid ? 'correct' : 'incorrect'}" data-entry-id="${escapeHtml(row.id || '')}" aria-label="Toggle paid status for ${row.name}">${row.isPaid ? '✅' : '❌'}</button>`
                   : row.paidStatus}
               </td>
               <td>${row.weeklyPicksMade}</td>
@@ -2324,14 +2710,14 @@ async function renderNewsPage() {
   if (isCommissioner) {
     pageBody.querySelectorAll('.paid-toggle-button').forEach((button) => {
       button.addEventListener('click', async function () {
-        const userName = button.dataset.userName;
+        const entryId = button.dataset.entryId;
         const standingsUsers = loadStandingsUsers();
-        const user = standingsUsers.find((entry) => entry.name === userName);
+        const user = standingsUsers.find((entry) => getEntryId(entry) === normalizeEntryId(entryId));
         if (!user) {
           return;
         }
 
-        await setPaidStatusForStandingsUser(userName, !user.paid);
+        await setPaidStatusForStandingsUser(user.id || user.entryId, !user.paid);
         renderNewsPage();
       });
     });
@@ -2378,31 +2764,42 @@ async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1)
   const currentWeek = getCurrentContestWeek();
   const visibleWeeks = Array.from({ length: 19 }, (_, index) => index);
   const currentUserLabel = getCurrentUserDisplayLabel();
-  const currentUserEmailNormalized = (currentUserEmail || '').trim().toLowerCase();
-  const currentUserLabelNormalized = (currentUserLabel || '').trim().toLowerCase();
   const players = (() => {
-    const list = [{ id: 'me', label: currentUserLabel || 'You', picks: myPicks, superLocks }];
-    const otherUsers = loadStandingsUsers().filter((user) => {
-      const userEmailNormalized = (user.email || '').trim().toLowerCase();
-      const userNameNormalized = (user.name || '').trim().toLowerCase();
-      if (userEmailNormalized) {
-        return userEmailNormalized !== currentUserEmailNormalized;
-      }
-      return userNameNormalized !== currentUserLabelNormalized && userNameNormalized !== currentUserEmailNormalized;
-    });
+    const standingsUsers = loadStandingsUsers();
+    const ownEntries = standingsUsers
+      .filter((user) => isOwnedByCurrentUser(user))
+      .map((user) => {
+        const entryId = getEntryId(user);
+        const isActiveEntry = entryId === normalizeEntryId(activeEntryId);
+        return {
+          id: entryId,
+          label: user.name || currentUserLabel || 'You',
+          picks: isActiveEntry ? myPicks : (Array.isArray(user.picks) ? user.picks : []),
+          superLocks: isActiveEntry ? superLocks : (user.superLocks || {}),
+          ownerEmail: getOwnerEmail(user)
+        };
+      });
 
-    otherUsers.forEach((user) => {
-      list.push({
-        id: user.email || user.name,
+    const otherEntries = standingsUsers
+      .filter((user) => !isOwnedByCurrentUser(user))
+      .map((user) => ({
+        id: getEntryId(user),
         label: user.name,
         picks: Array.isArray(user.picks) ? user.picks : [],
-        superLocks: user.superLocks || {}
-      });
-    });
-    return list;
+        superLocks: user.superLocks || {},
+        ownerEmail: getOwnerEmail(user)
+      }));
+
+    const fallbackId = normalizeEntryId(activeEntryId) || 'local-primary';
+    const ownList = ownEntries.length
+      ? ownEntries
+      : [{ id: fallbackId, label: currentUserLabel || 'You', picks: myPicks, superLocks, ownerEmail: (currentUserEmail || '').trim().toLowerCase() }];
+
+    return ownList.concat(otherEntries);
   })();
 
-  const activePlayer = players.find((player) => player.id === selectedPlayerId) || players[0];
+  const preferredPlayerId = selectedPlayerId === 'me' ? (normalizeEntryId(activeEntryId) || players[0]?.id) : selectedPlayerId;
+  const activePlayer = players.find((player) => player.id === preferredPlayerId) || players[0];
   const activeWeek = visibleWeeks.includes(Number(selectedWeekValue)) ? Number(selectedWeekValue) : currentWeek;
   const playerPicks = (activePlayer.picks || []).sort((a, b) => a.week - b.week);
   const picksByWeek = playerPicks.reduce((groups, pick) => {
@@ -2412,7 +2809,7 @@ async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1)
   }, {});
   const weekPicks = picksByWeek[activeWeek] || [];
   const lock = activePlayer.superLocks?.[activeWeek];
-  const isCurrentPlayerView = activePlayer.id === 'me';
+  const isCurrentPlayerView = activePlayer.ownerEmail === (currentUserEmail || '').trim().toLowerCase();
   const isCommissionerViewer = isCurrentUserCommissioner();
   const canEditSelectedWeek = canEditPicksForWeek(activeWeek, currentUserEmail, activePlayer.id) && (isCurrentPlayerView || isCommissionerViewer);
   const visibilityNow = new Date();
@@ -2556,7 +2953,20 @@ async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1)
       selectedWeek = week;
       selectedTeams = normalizeSelectedTeamsForWeek(week, (activePlayer.picks || []).filter((pick) => pick.week === week).map((pick) => getPickSelectionKey(pick)));
       selectedLock = normalizeSelectedLockForWeek(week, activePlayer.superLocks?.[week] || null, selectedTeams);
-      currentEditingPlayerName = isCurrentUserCommissioner() && !isCurrentPlayerView ? activePlayer.label : null;
+      currentEditingPlayerName = activePlayer.id;
+      if (isCurrentPlayerView) {
+        activeEntryId = activePlayer.id;
+        hydrateLocalStateFromEntry({
+          id: activePlayer.id,
+          entryId: activePlayer.id,
+          ownerEmail: activePlayer.ownerEmail,
+          email: activePlayer.ownerEmail,
+          name: activePlayer.label,
+          picks: activePlayer.picks,
+          superLocks: activePlayer.superLocks,
+          joinedContests
+        });
+      }
       selectedContest = contests.super7.id;
       renderSuper7Contest();
     });
@@ -2567,9 +2977,54 @@ function showMessage(message) {
   formMessage.textContent = message;
 }
 
-popupCloseButton.addEventListener('click', hidePopupMessage);
+popupCloseButton.addEventListener('click', async function () {
+  if (popupConfirmHandler) {
+    const handler = popupConfirmHandler;
+    popupConfirmHandler = null;
+    popupBusy = true;
+    popupCloseButton.disabled = true;
+    if (popupCancelButton) {
+      popupCancelButton.disabled = true;
+    }
+    popupCloseButton.textContent = 'Removing...';
+    try {
+      const shouldClose = await handler();
+      if (shouldClose !== false) {
+        hidePopupMessage();
+      }
+      return;
+    } catch (error) {
+      popupBusy = false;
+      popupCloseButton.disabled = false;
+      if (popupCancelButton) {
+        popupCancelButton.disabled = false;
+      }
+      showPopupMessage(error?.message || 'Unable to complete the action.');
+      return;
+    } finally {
+      popupBusy = false;
+      popupCloseButton.disabled = false;
+      if (popupCancelButton) {
+        popupCancelButton.disabled = false;
+      }
+    }
+  }
+
+  hidePopupMessage();
+});
+
+if (popupCancelButton) {
+  popupCancelButton.addEventListener('click', function () {
+    if (popupBusy) {
+      return;
+    }
+    popupConfirmHandler = null;
+    hidePopupMessage();
+  });
+}
 popupOverlay.addEventListener('click', function (event) {
-  if (event.target === popupOverlay) {
+  if (event.target === popupOverlay && !popupBusy) {
+    popupConfirmHandler = null;
     hidePopupMessage();
   }
 });
@@ -2579,7 +3034,36 @@ function showPopupMessage(message) {
     return;
   }
 
+  popupBusy = false;
+  popupConfirmHandler = null;
+  if (popupCancelButton) {
+    popupCancelButton.classList.add('hidden');
+    popupCancelButton.disabled = false;
+  }
+  popupCloseButton.textContent = 'OK';
+  popupCloseButton.disabled = false;
   popupMessage.textContent = message;
+  popupOverlay.classList.remove('hidden');
+}
+
+function showConfirmPopup({ title = 'Notice', message, confirmText = 'OK', onConfirm }) {
+  if (!popupOverlay || !popupMessage || !popupCloseButton) {
+    return;
+  }
+
+  popupBusy = false;
+  const popupTitle = document.getElementById('popup-title');
+  if (popupTitle) {
+    popupTitle.textContent = title;
+  }
+  popupMessage.textContent = message;
+  popupConfirmHandler = typeof onConfirm === 'function' ? onConfirm : null;
+  if (popupCancelButton) {
+    popupCancelButton.classList.remove('hidden');
+    popupCancelButton.disabled = false;
+  }
+  popupCloseButton.textContent = confirmText;
+  popupCloseButton.disabled = false;
   popupOverlay.classList.remove('hidden');
 }
 
@@ -2587,6 +3071,19 @@ function hidePopupMessage() {
   if (!popupOverlay) {
     return;
   }
+
+  const popupTitle = document.getElementById('popup-title');
+  if (popupTitle) {
+    popupTitle.textContent = 'Notice';
+  }
+  popupConfirmHandler = null;
+  popupBusy = false;
+  if (popupCancelButton) {
+    popupCancelButton.classList.add('hidden');
+    popupCancelButton.disabled = false;
+  }
+  popupCloseButton.textContent = 'OK';
+  popupCloseButton.disabled = false;
 
   popupOverlay.classList.add('hidden');
 }
@@ -2597,6 +3094,10 @@ async function showProtectedPage() {
   updateLoggedInUserDisplay();
   await hydrateCurrentUserStateFromServer();
   await refreshStandingsUsersFromServer();
+  const activeEntry = ensureActiveEntryId();
+  if (activeEntry) {
+    hydrateLocalStateFromEntry(activeEntry);
+  }
 
   currentPage = 'home';
   selectPage(currentPage);
