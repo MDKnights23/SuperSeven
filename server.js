@@ -16,6 +16,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
 const SMACK_TALK_MAX_CHARS = 500;
 const SMACK_TALK_MAX_GIF_URL_CHARS = 1000;
+const SMACK_TALK_MAX_REACTION_CHARS = 16;
 const SMACK_TALK_COOLDOWN_SECONDS = 10;
 const GIPHY_API_KEY = (process.env.GIPHY_API_KEY || '').trim();
 const GIPHY_RATING = (process.env.GIPHY_RATING || 'pg-13').trim();
@@ -176,6 +177,27 @@ function isValidSmackTalkGifUrl(gifUrl) {
   } catch {
     return false;
   }
+}
+
+function sanitizeSmackTalkReactionEmoji(emoji) {
+  if (typeof emoji !== 'string') {
+    return '';
+  }
+
+  return emoji.trim().slice(0, SMACK_TALK_MAX_REACTION_CHARS);
+}
+
+function isValidSmackTalkReactionEmoji(emoji) {
+  const candidate = sanitizeSmackTalkReactionEmoji(emoji);
+  if (!candidate || candidate.length > SMACK_TALK_MAX_REACTION_CHARS) {
+    return false;
+  }
+
+  if (/\s/.test(candidate)) {
+    return false;
+  }
+
+  return true;
 }
 
 function normalizeSmackTalkPostRow(row) {
@@ -412,7 +434,177 @@ async function listSmackTalkPosts(limit = 200) {
     .limit(safeLimit);
   if (error) throw error;
 
-  return (data || []).map(normalizeSmackTalkPostRow);
+  const posts = (data || []).map(normalizeSmackTalkPostRow);
+  const postIds = posts.map((post) => post.id).filter(Boolean);
+  if (!postIds.length) {
+    return posts;
+  }
+
+  const { data: reactionRows, error: reactionsError } = await supabase
+    .from('smack_talk_reactions')
+    .select('post_id, reactor_email, emoji')
+    .in('post_id', postIds);
+  if (reactionsError) throw reactionsError;
+
+  const reactionsByPost = new Map();
+  for (const row of (reactionRows || [])) {
+    const postId = String(row.post_id || '').trim();
+    const reactionEmoji = sanitizeSmackTalkReactionEmoji(row.emoji);
+    if (!postId || !reactionEmoji) {
+      continue;
+    }
+
+    if (!reactionsByPost.has(postId)) {
+      reactionsByPost.set(postId, new Map());
+    }
+
+    const emojiMap = reactionsByPost.get(postId);
+    if (!emojiMap.has(reactionEmoji)) {
+      emojiMap.set(reactionEmoji, { count: 0, reactors: new Set() });
+    }
+
+    const reactionInfo = emojiMap.get(reactionEmoji);
+    reactionInfo.count += 1;
+    reactionInfo.reactors.add(String(row.reactor_email || '').trim().toLowerCase());
+  }
+
+  return posts.map((post) => {
+    const emojiMap = reactionsByPost.get(post.id) || new Map();
+    const reactions = Array.from(emojiMap.entries())
+      .map(([emoji, info]) => ({
+        emoji,
+        count: Number(info.count) || 0,
+        reactors: Array.from(info.reactors)
+      }))
+      .sort((left, right) => {
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+        return left.emoji.localeCompare(right.emoji);
+      });
+
+    return {
+      ...post,
+      reactions
+    };
+  });
+}
+
+function summarizeSmackTalkReactionsForViewer(reactionRows, viewerEmail = '') {
+  const normalizedViewerEmail = typeof viewerEmail === 'string' ? viewerEmail.trim().toLowerCase() : '';
+  const emojiMap = new Map();
+
+  for (const row of (reactionRows || [])) {
+    const reactionEmoji = sanitizeSmackTalkReactionEmoji(row.emoji);
+    if (!reactionEmoji) {
+      continue;
+    }
+
+    if (!emojiMap.has(reactionEmoji)) {
+      emojiMap.set(reactionEmoji, { count: 0, reactedByCurrentUser: false });
+    }
+
+    const info = emojiMap.get(reactionEmoji);
+    info.count += 1;
+    const reactorEmail = String(row.reactor_email || '').trim().toLowerCase();
+    if (normalizedViewerEmail && reactorEmail === normalizedViewerEmail) {
+      info.reactedByCurrentUser = true;
+    }
+  }
+
+  return Array.from(emojiMap.entries())
+    .map(([emoji, info]) => ({
+      emoji,
+      count: Number(info.count) || 0,
+      reactedByCurrentUser: Boolean(info.reactedByCurrentUser)
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return left.emoji.localeCompare(right.emoji);
+    });
+}
+
+async function listSmackTalkReactionsForPost(postId) {
+  const normalizedPostId = typeof postId === 'string' ? postId.trim() : '';
+  if (!normalizedPostId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('smack_talk_reactions')
+    .select('reactor_email, emoji')
+    .eq('post_id', normalizedPostId);
+  if (error) throw error;
+
+  return data || [];
+}
+
+async function toggleSmackTalkReaction(postId, requesterEmail, emoji) {
+  const normalizedPostId = typeof postId === 'string' ? postId.trim() : '';
+  const normalizedRequester = typeof requesterEmail === 'string' ? requesterEmail.trim().toLowerCase() : '';
+  const normalizedEmoji = sanitizeSmackTalkReactionEmoji(emoji);
+  if (!normalizedPostId) {
+    return { toggled: false, reason: 'invalid' };
+  }
+  if (!isValidSmackTalkReactionEmoji(normalizedEmoji)) {
+    return { toggled: false, reason: 'invalid-emoji' };
+  }
+
+  const { data: post, error: postLookupError } = await supabase
+    .from('smack_talk_posts')
+    .select('id')
+    .eq('id', normalizedPostId)
+    .maybeSingle();
+  if (postLookupError) throw postLookupError;
+  if (!post) {
+    return { toggled: false, reason: 'missing' };
+  }
+
+  const { data: existingReaction, error: lookupError } = await supabase
+    .from('smack_talk_reactions')
+    .select('id, emoji')
+    .eq('post_id', normalizedPostId)
+    .eq('reactor_email', normalizedRequester)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  let active = false;
+  if (existingReaction?.id && sanitizeSmackTalkReactionEmoji(existingReaction.emoji) === normalizedEmoji) {
+    const { error: deleteError } = await supabase
+      .from('smack_talk_reactions')
+      .delete()
+      .eq('id', existingReaction.id);
+    if (deleteError) throw deleteError;
+    active = false;
+  } else if (existingReaction?.id) {
+    const { error: updateError } = await supabase
+      .from('smack_talk_reactions')
+      .update({ emoji: normalizedEmoji })
+      .eq('id', existingReaction.id);
+    if (updateError) throw updateError;
+    active = true;
+  } else {
+    const { error: insertError } = await supabase
+      .from('smack_talk_reactions')
+      .insert({
+        id: crypto.randomUUID(),
+        post_id: normalizedPostId,
+        reactor_email: normalizedRequester,
+        emoji: normalizedEmoji
+      });
+    if (insertError) throw insertError;
+    active = true;
+  }
+
+  const reactionRows = await listSmackTalkReactionsForPost(normalizedPostId);
+  return {
+    toggled: true,
+    active,
+    emoji: normalizedEmoji,
+    reactions: summarizeSmackTalkReactionsForViewer(reactionRows, normalizedRequester)
+  };
 }
 
 async function resolvePostingDisplayName(ownerEmail, entryId = '') {
@@ -708,7 +900,49 @@ async function handleApi(request, response) {
       }
 
       const posts = await listSmackTalkPosts(200);
-      return sendJson(response, 200, { posts });
+      const normalizedSessionEmail = String(session.email || '').trim().toLowerCase();
+      const decoratedPosts = posts.map((post) => ({
+        ...post,
+        reactions: (post.reactions || []).map((reaction) => ({
+          emoji: reaction.emoji,
+          count: reaction.count,
+          reactedByCurrentUser: (reaction.reactors || []).includes(normalizedSessionEmail)
+        }))
+      }));
+      return sendJson(response, 200, { posts: decoratedPosts });
+    }
+
+    const postReactionMatch = requestUrl.pathname.match(/^\/api\/smack-posts\/([^/]+)\/reactions$/);
+    if (request.method === 'POST' && postReactionMatch) {
+      const session = await currentSession(request);
+      if (!session) {
+        return sendJson(response, 401, { error: 'Not signed in.' });
+      }
+
+      const postId = decodeURIComponent(postReactionMatch[1] || '').trim();
+      if (!postId) {
+        return sendJson(response, 400, { error: 'Post ID is required.' });
+      }
+
+      const body = await readRequestBody(request);
+      const reactionEmoji = sanitizeSmackTalkReactionEmoji(body.emoji);
+      const result = await toggleSmackTalkReaction(postId, session.email, reactionEmoji);
+      if (result.reason === 'invalid-emoji') {
+        return sendJson(response, 400, { error: 'Pick a valid reaction emoji.' });
+      }
+      if (result.reason === 'missing') {
+        return sendJson(response, 404, { error: 'Smack Talk post not found.' });
+      }
+      if (!result.toggled) {
+        return sendJson(response, 400, { error: 'Unable to update reaction.' });
+      }
+
+      return sendJson(response, 200, {
+        postId,
+        emoji: result.emoji,
+        active: result.active,
+        reactions: result.reactions
+      });
     }
 
     if (request.method === 'GET' && requestUrl.pathname === '/api/gif-suggestions') {

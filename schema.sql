@@ -53,6 +53,42 @@ create table if not exists public.smack_talk_posts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.smack_talk_reactions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.smack_talk_posts(id) on delete cascade,
+  reactor_email text not null references public.users(email) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now(),
+  unique (post_id, reactor_email)
+);
+
+-- If older data allowed multiple emojis per user/post, keep the latest and drop duplicates.
+delete from public.smack_talk_reactions as r
+using (
+  select id
+  from (
+    select
+      id,
+      row_number() over (
+        partition by post_id, reactor_email
+        order by created_at desc, id desc
+      ) as rn
+    from public.smack_talk_reactions
+  ) ranked
+  where ranked.rn > 1
+) as duplicates
+where r.id = duplicates.id;
+
+alter table public.smack_talk_reactions
+  drop constraint if exists smack_talk_reactions_post_id_reactor_email_emoji_key;
+
+alter table public.smack_talk_reactions
+  drop constraint if exists smack_talk_reactions_post_id_reactor_email_key;
+
+alter table public.smack_talk_reactions
+  add constraint smack_talk_reactions_post_id_reactor_email_key
+  unique (post_id, reactor_email);
+
 -- Smack Talk cooldown and deletion permissions are enforced in the Node API layer.
 
 alter table public.smack_talk_posts
@@ -104,6 +140,8 @@ create index if not exists user_entries_owner_email_idx on public.user_entries(o
 create index if not exists user_entries_updated_at_idx on public.user_entries(updated_at desc);
 create index if not exists smack_talk_posts_created_at_idx on public.smack_talk_posts(created_at desc);
 create index if not exists smack_talk_posts_parent_post_id_idx on public.smack_talk_posts(parent_post_id);
+create index if not exists smack_talk_reactions_post_id_idx on public.smack_talk_reactions(post_id);
+create index if not exists smack_talk_reactions_reactor_email_idx on public.smack_talk_reactions(reactor_email);
 
 create or replace function public.enforce_user_entry_limit()
 returns trigger
@@ -135,9 +173,11 @@ alter table public.sessions enable row level security;
 alter table public.standings_users enable row level security;
 alter table public.user_entries enable row level security;
 alter table public.smack_talk_posts enable row level security;
+alter table public.smack_talk_reactions enable row level security;
 
 revoke all on public.users from anon, authenticated;
 revoke all on public.sessions from anon, authenticated;
 revoke all on public.standings_users from anon, authenticated;
 revoke all on public.user_entries from anon, authenticated;
 revoke all on public.smack_talk_posts from anon, authenticated;
+revoke all on public.smack_talk_reactions from anon, authenticated;

@@ -38,6 +38,8 @@ const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
 const SMACK_TALK_MAX_CHARS = 500;
 const SMACK_TALK_MAX_GIF_URL_CHARS = 1000;
 const SMACK_TALK_GIF_SEARCH_LIMIT = 18;
+const SMACK_TALK_REACTION_CHOICES = ['🔥', '😂', '💯', '🏈', '👏', '👀', '😮', '🤡'];
+const SMACK_TALK_REACTION_SEARCH_LIMIT = 24;
 const SMACK_TALK_EMOJI_LIBRARY = [
   { emoji: '😀', keywords: 'grinning smile happy' },
   { emoji: '😎', keywords: 'cool sunglasses' },
@@ -3440,6 +3442,56 @@ async function deleteSmackTalkPost(postId) {
   return true;
 }
 
+async function toggleSmackTalkReaction(postId, emoji) {
+  const response = await fetch(`/api/smack-posts/${encodeURIComponent(postId)}/reactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ emoji })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to update reaction.');
+  }
+  return payload;
+}
+
+function isLikelyEmojiReaction(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate || candidate.length > 16 || /\s/.test(candidate)) {
+    return false;
+  }
+
+  return /[\p{Extended_Pictographic}\uFE0F]/u.test(candidate);
+}
+
+function getSmackTalkReactionSearchResults(query = '') {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const seen = new Set();
+  const results = [];
+
+  for (const item of SMACK_TALK_EMOJI_LIBRARY) {
+    const emoji = String(item?.emoji || '').trim();
+    if (!emoji || seen.has(emoji)) {
+      continue;
+    }
+
+    const keywords = String(item?.keywords || '').toLowerCase();
+    const matched = !normalizedQuery || keywords.includes(normalizedQuery) || emoji.includes(normalizedQuery);
+    if (!matched) {
+      continue;
+    }
+
+    seen.add(emoji);
+    results.push({ emoji, keywords: item.keywords || '' });
+    if (results.length >= SMACK_TALK_REACTION_SEARCH_LIMIT) {
+      break;
+    }
+  }
+
+  return results;
+}
+
 async function renderSmackTalkPage() {
   pageTitle.textContent = 'Smack Talk';
   pageText.textContent = 'Post, edit, and reply to short messages for the full group.';
@@ -3479,6 +3531,28 @@ async function renderSmackTalkPage() {
     const canManagePost = isCommissioner || postAuthorEmail === currentEmailNormalized;
     const editedLabel = post.editedAt ? '<span class="smack-post-edited">Edited</span>' : '';
     const replyTargetId = post.parentPostId || post.id;
+    const rawReactions = Array.isArray(post.reactions) ? post.reactions : [];
+    const reactionMap = new Map(rawReactions.map((reaction) => [
+      String(reaction.emoji || ''),
+      {
+        count: Number(reaction.count) || 0,
+        reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser)
+      }
+    ]));
+    const knownReactionSet = new Set(SMACK_TALK_REACTION_CHOICES);
+    const displayReactions = [
+      ...SMACK_TALK_REACTION_CHOICES.map((emoji) => {
+        const details = reactionMap.get(emoji) || { count: 0, reactedByCurrentUser: false };
+        return { emoji, count: details.count, reactedByCurrentUser: details.reactedByCurrentUser };
+      }),
+      ...rawReactions
+        .filter((reaction) => reaction?.emoji && !knownReactionSet.has(reaction.emoji))
+        .map((reaction) => ({
+          emoji: reaction.emoji,
+          count: Number(reaction.count) || 0,
+          reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser)
+        }))
+    ];
     return `
       <article class="smack-post${isReply ? ' smack-post-reply' : ''}">
         <div class="smack-post-header">
@@ -3490,6 +3564,36 @@ async function renderSmackTalkPage() {
         </div>
         <p class="smack-post-message">${safeMessage}</p>
         ${post.gifUrl ? `<div class="smack-post-gif-wrap"><img class="smack-post-gif" src="${escapeHtml(post.gifUrl)}" alt="GIF shared by ${escapeHtml(post.displayName || post.authorEmail || 'player')}" loading="lazy" /></div>` : ''}
+        <div class="smack-post-reactions">
+          ${displayReactions.map((reaction) => `
+            <button
+              type="button"
+              class="smack-reaction-button${reaction.reactedByCurrentUser ? ' is-active' : ''}"
+              data-post-id="${escapeHtml(post.id || '')}"
+              data-emoji="${escapeHtml(reaction.emoji || '')}"
+              aria-label="React with ${escapeHtml(reaction.emoji || 'emoji')}"
+            >
+              <span class="smack-reaction-emoji">${escapeHtml(reaction.emoji || '')}</span>
+              ${reaction.count > 0 ? `<span class="smack-reaction-count">${reaction.count}</span>` : ''}
+            </button>
+          `).join('')}
+          <div class="smack-reaction-more-wrap">
+            <button
+              type="button"
+              class="smack-reaction-more-toggle"
+              data-post-id="${escapeHtml(post.id || '')}"
+              aria-label="Search more reactions"
+            >
+              +
+            </button>
+            <div class="smack-reaction-picker hidden" data-post-id="${escapeHtml(post.id || '')}">
+              <div class="smack-reaction-picker-header">
+                <input type="search" class="smack-reaction-search" placeholder="Search emoji reactions" data-post-id="${escapeHtml(post.id || '')}" />
+              </div>
+              <div class="smack-reaction-search-grid" data-post-id="${escapeHtml(post.id || '')}"></div>
+            </div>
+          </div>
+        </div>
         <div class="smack-post-actions">
           <button type="button" class="smack-post-reply-button" data-post-id="${escapeHtml(replyTargetId)}" data-author="${escapeHtml(post.displayName || post.authorEmail || 'Player')}">Reply</button>
           ${canManagePost ? `<button type="button" class="smack-post-edit-button" data-post-id="${escapeHtml(post.id || '')}" data-author="${escapeHtml(post.displayName || post.authorEmail || 'Player')}">Edit</button>` : ''}
@@ -3925,6 +4029,127 @@ async function renderSmackTalkPage() {
           }
         }
       });
+    });
+  });
+
+  pageBody.querySelectorAll('.smack-reaction-button').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const postId = button.dataset.postId || '';
+      const emoji = button.dataset.emoji || '';
+      if (!postId || !emoji) {
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        await toggleSmackTalkReaction(postId, emoji);
+        await renderSmackTalkPage();
+      } catch (error) {
+        showMessage(error.message || 'Unable to update reaction.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  const closeOtherReactionPickers = function (keepPostId = '') {
+    pageBody.querySelectorAll('.smack-reaction-picker').forEach((picker) => {
+      const pickerPostId = picker.getAttribute('data-post-id') || '';
+      if (pickerPostId !== keepPostId) {
+        picker.classList.add('hidden');
+      }
+    });
+  };
+
+  const renderReactionSearchGrid = function (postId, query = '') {
+    const targetPostId = String(postId || '').trim();
+    if (!targetPostId) {
+      return;
+    }
+
+    const grid = pageBody.querySelector(`.smack-reaction-search-grid[data-post-id="${CSS.escape(targetPostId)}"]`);
+    if (!grid) {
+      return;
+    }
+
+    const results = getSmackTalkReactionSearchResults(query);
+    const normalizedQuery = String(query || '').trim();
+    const hasCustomEmoji = isLikelyEmojiReaction(normalizedQuery) && !results.some((item) => item.emoji === normalizedQuery);
+
+    const resultButtons = results.map((item) => `
+      <button type="button" class="smack-reaction-search-item" data-post-id="${escapeHtml(targetPostId)}" data-emoji="${escapeHtml(item.emoji)}" title="${escapeHtml(item.keywords || 'emoji reaction')}">
+        ${escapeHtml(item.emoji)}
+      </button>
+    `).join('');
+
+    const customButton = hasCustomEmoji
+      ? `
+        <button type="button" class="smack-reaction-search-item smack-reaction-search-item-custom" data-post-id="${escapeHtml(targetPostId)}" data-emoji="${escapeHtml(normalizedQuery)}" title="Use ${escapeHtml(normalizedQuery)} as a reaction">
+          ${escapeHtml(normalizedQuery)}
+        </button>
+      `
+      : '';
+
+    grid.innerHTML = resultButtons || customButton
+      ? `${resultButtons}${customButton}`
+      : '<p class="help-text">No emoji matches.</p>';
+  };
+
+  pageBody.querySelectorAll('.smack-reaction-more-toggle').forEach((button) => {
+    button.addEventListener('click', function () {
+      const postId = button.dataset.postId || '';
+      if (!postId) {
+        return;
+      }
+
+      const picker = pageBody.querySelector(`.smack-reaction-picker[data-post-id="${CSS.escape(postId)}"]`);
+      const input = pageBody.querySelector(`.smack-reaction-search[data-post-id="${CSS.escape(postId)}"]`);
+      if (!picker) {
+        return;
+      }
+
+      const opening = picker.classList.contains('hidden');
+      closeOtherReactionPickers(postId);
+      picker.classList.toggle('hidden');
+      if (opening) {
+        renderReactionSearchGrid(postId, input?.value || '');
+        input?.focus();
+      }
+    });
+  });
+
+  pageBody.querySelectorAll('.smack-reaction-search').forEach((input) => {
+    input.addEventListener('input', function () {
+      const postId = input.dataset.postId || '';
+      renderReactionSearchGrid(postId, input.value || '');
+    });
+  });
+
+  pageBody.querySelectorAll('.smack-reaction-search-grid').forEach((grid) => {
+    const postId = grid.getAttribute('data-post-id') || '';
+    renderReactionSearchGrid(postId, '');
+
+    grid.addEventListener('click', async function (event) {
+      const target = event.target instanceof Element ? event.target.closest('.smack-reaction-search-item') : null;
+      if (!target) {
+        return;
+      }
+
+      const reactionPostId = target.getAttribute('data-post-id') || '';
+      const emoji = target.getAttribute('data-emoji') || '';
+      if (!reactionPostId || !emoji) {
+        return;
+      }
+
+      target.setAttribute('disabled', 'disabled');
+      try {
+        await toggleSmackTalkReaction(reactionPostId, emoji);
+        await renderSmackTalkPage();
+      } catch (error) {
+        showMessage(error.message || 'Unable to update reaction.');
+      } finally {
+        target.removeAttribute('disabled');
+      }
     });
   });
 }
