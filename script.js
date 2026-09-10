@@ -35,6 +35,51 @@ let popupConfirmHandler = null;
 let popupBusy = false;
 
 const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
+const SMACK_TALK_MAX_CHARS = 500;
+const SMACK_TALK_MAX_GIF_URL_CHARS = 1000;
+const SMACK_TALK_GIF_SEARCH_LIMIT = 18;
+const SMACK_TALK_EMOJI_LIBRARY = [
+  { emoji: '😀', keywords: 'grinning smile happy' },
+  { emoji: '😎', keywords: 'cool sunglasses' },
+  { emoji: '🔥', keywords: 'fire lit hot' },
+  { emoji: '💯', keywords: 'hundred score perfect' },
+  { emoji: '🤣', keywords: 'laughing funny tears' },
+  { emoji: '😂', keywords: 'laugh cry tears' },
+  { emoji: '😏', keywords: 'smirk sass' },
+  { emoji: '😤', keywords: 'huff mad' },
+  { emoji: '🤯', keywords: 'mind blown wow' },
+  { emoji: '🤔', keywords: 'thinking hmm' },
+  { emoji: '😬', keywords: 'grimace awkward' },
+  { emoji: '🙌', keywords: 'celebrate hands up' },
+  { emoji: '👏', keywords: 'clap applause' },
+  { emoji: '🫡', keywords: 'salute respect' },
+  { emoji: '👀', keywords: 'eyes watching' },
+  { emoji: '😴', keywords: 'sleep boring' },
+  { emoji: '🤡', keywords: 'clown joke' },
+  { emoji: '🧠', keywords: 'brain smart' },
+  { emoji: '🏈', keywords: 'football nfl' },
+  { emoji: '🏆', keywords: 'trophy win champion' },
+  { emoji: '🥇', keywords: 'gold first place' },
+  { emoji: '🥈', keywords: 'silver second place' },
+  { emoji: '🥉', keywords: 'bronze third place' },
+  { emoji: '✅', keywords: 'check correct good' },
+  { emoji: '❌', keywords: 'x wrong no' },
+  { emoji: '⚠️', keywords: 'warning alert' },
+  { emoji: '😈', keywords: 'devil trash talk' },
+  { emoji: '👑', keywords: 'king crown winner' },
+  { emoji: '🧹', keywords: 'sweep' },
+  { emoji: '💪', keywords: 'strong flex' },
+  { emoji: '🍿', keywords: 'popcorn watch' },
+  { emoji: '🚨', keywords: 'siren breaking news' },
+  { emoji: '📉', keywords: 'down fail' },
+  { emoji: '📈', keywords: 'up rise' },
+  { emoji: '💸', keywords: 'money lose bet' },
+  { emoji: '🫵', keywords: 'you finger point' },
+  { emoji: '🤝', keywords: 'handshake deal' },
+  { emoji: '🙏', keywords: 'pray please' },
+  { emoji: '🎯', keywords: 'target hit' },
+  { emoji: '🧊', keywords: 'cold ice' }
+];
 const USER_ROLES = {
   PLAYER: 'Player',
   COMMISSIONER: 'Commissioner'
@@ -3219,6 +3264,8 @@ function selectPage(page) {
 
   if (page === 'home') {
     renderHomePage();
+  } else if (page === 'smacktalk') {
+    renderSmackTalkPage();
   } else if (page === 'commish') {
     renderCommishPage();
   } else if (page === 'news') {
@@ -3230,6 +3277,656 @@ function selectPage(page) {
   } else {
     renderHomePage();
   }
+}
+
+function formatSmackPostTime(timestamp) {
+  if (!timestamp) {
+    return '';
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function normalizeSmackTalkMessage(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeSmackTalkGifUrl(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isValidSmackTalkGifUrl(value) {
+  const gifUrl = normalizeSmackTalkGifUrl(value);
+  if (!gifUrl) {
+    return true;
+  }
+
+  if (gifUrl.length > SMACK_TALK_MAX_GIF_URL_CHARS) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(gifUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+
+    const looksLikeGifAsset = /\.gif($|\?)/i.test(parsed.pathname) || /giphy|tenor/i.test(parsed.hostname);
+    return looksLikeGifAsset;
+  } catch {
+    return false;
+  }
+}
+
+function insertTextAtCursor(textarea, textToInsert) {
+  if (!textarea || typeof textarea.value !== 'string') {
+    return;
+  }
+
+  const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+  const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+  const prefix = textarea.value.slice(0, start);
+  const suffix = textarea.value.slice(end);
+  textarea.value = `${prefix}${textToInsert}${suffix}`;
+  const nextCaret = start + textToInsert.length;
+  textarea.setSelectionRange(nextCaret, nextCaret);
+}
+
+async function fetchSmackTalkGifSuggestions(query = '', cursor = '') {
+  const params = new URLSearchParams();
+  if (query && query.trim()) {
+    params.set('q', query.trim());
+  }
+  if (cursor && cursor.trim()) {
+    params.set('pos', cursor.trim());
+  }
+  params.set('limit', String(SMACK_TALK_GIF_SEARCH_LIMIT));
+
+  const response = await fetch(`/api/gif-suggestions?${params.toString()}`, { credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to load GIF suggestions.');
+  }
+
+  return {
+    items: Array.isArray(payload.items) ? payload.items : [],
+    next: typeof payload.next === 'string' ? payload.next : ''
+  };
+}
+
+async function fetchSmackTalkPosts() {
+  const response = await fetch('/api/smack-posts', { credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to load Smack Talk posts.');
+  }
+  return Array.isArray(payload.posts) ? payload.posts : [];
+}
+
+async function createSmackTalkPost(message, entryId = null, gifUrl = '') {
+  const response = await fetch('/api/smack-posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      message,
+      entryId: entryId || undefined,
+      gifUrl: gifUrl || undefined,
+      parentPostId: null
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to post to Smack Talk.');
+  }
+  return payload.post;
+}
+
+async function createSmackTalkReply(message, parentPostId, entryId = null, gifUrl = '') {
+  const response = await fetch('/api/smack-posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      message,
+      entryId: entryId || undefined,
+      gifUrl: gifUrl || undefined,
+      parentPostId: parentPostId || undefined
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to post reply.');
+  }
+  return payload.post;
+}
+
+async function updateSmackTalkPost(postId, message, gifUrl = '') {
+  const response = await fetch(`/api/smack-posts/${encodeURIComponent(postId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      message,
+      gifUrl: gifUrl || undefined
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to update Smack Talk post.');
+  }
+  return payload.post;
+}
+
+async function deleteSmackTalkPost(postId) {
+  const response = await fetch(`/api/smack-posts/${encodeURIComponent(postId)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin'
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Unable to delete Smack Talk post.');
+  }
+  return true;
+}
+
+async function renderSmackTalkPage() {
+  pageTitle.textContent = 'Smack Talk';
+  pageText.textContent = 'Post, edit, and reply to short messages for the full group.';
+  updateSiteStatusBar();
+
+  let posts = [];
+  try {
+    posts = await fetchSmackTalkPosts();
+  } catch (error) {
+    showMessage(error.message || 'Unable to load Smack Talk posts.');
+  }
+
+  const postsById = new Map(posts.map((post) => [post.id, post]));
+  const topLevelPosts = posts.filter((post) => !post.parentPostId);
+  const repliesByParent = new Map();
+  posts.forEach((post) => {
+    if (!post.parentPostId) {
+      return;
+    }
+
+    const parentId = post.parentPostId;
+    if (!repliesByParent.has(parentId)) {
+      repliesByParent.set(parentId, []);
+    }
+    repliesByParent.get(parentId).push(post);
+  });
+  repliesByParent.forEach((replies) => {
+    replies.sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+  });
+
+  const currentEmailNormalized = String(currentUserEmail || '').trim().toLowerCase();
+  const isCommissioner = isCurrentUserCommissioner();
+  const renderPostMarkup = function (post, options = {}) {
+    const { isReply = false } = options;
+    const safeMessage = escapeHtml(post.message || '').replace(/\n/g, '<br />');
+    const postAuthorEmail = String(post.authorEmail || '').trim().toLowerCase();
+    const canManagePost = isCommissioner || postAuthorEmail === currentEmailNormalized;
+    const editedLabel = post.editedAt ? '<span class="smack-post-edited">Edited</span>' : '';
+    const replyTargetId = post.parentPostId || post.id;
+    return `
+      <article class="smack-post${isReply ? ' smack-post-reply' : ''}">
+        <div class="smack-post-header">
+          <strong class="smack-post-author">${escapeHtml(post.displayName || post.authorEmail || 'Player')}</strong>
+          <div class="smack-post-meta">
+            <span class="smack-post-time">${escapeHtml(formatSmackPostTime(post.createdAt))}</span>
+            ${editedLabel}
+          </div>
+        </div>
+        <p class="smack-post-message">${safeMessage}</p>
+        ${post.gifUrl ? `<div class="smack-post-gif-wrap"><img class="smack-post-gif" src="${escapeHtml(post.gifUrl)}" alt="GIF shared by ${escapeHtml(post.displayName || post.authorEmail || 'player')}" loading="lazy" /></div>` : ''}
+        <div class="smack-post-actions">
+          <button type="button" class="smack-post-reply-button" data-post-id="${escapeHtml(replyTargetId)}" data-author="${escapeHtml(post.displayName || post.authorEmail || 'Player')}">Reply</button>
+          ${canManagePost ? `<button type="button" class="smack-post-edit-button" data-post-id="${escapeHtml(post.id || '')}" data-author="${escapeHtml(post.displayName || post.authorEmail || 'Player')}">Edit</button>` : ''}
+          ${canManagePost ? `<button type="button" class="smack-post-delete" data-post-id="${escapeHtml(post.id || '')}" data-author="${escapeHtml(post.displayName || post.authorEmail || 'Player')}">Delete</button>` : ''}
+        </div>
+      </article>
+    `;
+  };
+
+  pageBody.innerHTML = `
+    <div class="contest-card">
+      <div class="contest-card-header">
+        <h2>Post to the wall</h2>
+        <p>Keep it short: up to ${SMACK_TALK_MAX_CHARS} characters.</p>
+      </div>
+      <form id="smack-talk-form" class="smack-talk-form">
+        <p class="smack-compose-mode" id="smack-compose-mode">New post</p>
+        <label for="smack-talk-message">Message</label>
+        <textarea id="smack-talk-message" name="smack-talk-message" maxlength="${SMACK_TALK_MAX_CHARS}" rows="4" required placeholder="What do you have to say?"></textarea>
+        <div class="smack-compose-tools">
+          <button type="button" class="secondary-button smack-tool-button" id="smack-emoji-toggle">Emoji</button>
+          <button type="button" class="secondary-button smack-tool-button" id="smack-gif-toggle">GIF</button>
+        </div>
+        <div class="smack-emoji-picker hidden" id="smack-emoji-picker">
+          <div class="smack-picker-header">
+            <input type="search" id="smack-emoji-search" placeholder="Search emoji" />
+          </div>
+          <div class="smack-emoji-grid" id="smack-emoji-grid"></div>
+        </div>
+        <div class="smack-gif-picker hidden" id="smack-gif-picker">
+          <div class="smack-picker-header smack-gif-search-row">
+            <input type="search" id="smack-gif-search" placeholder="Search GIFs" />
+            <button type="button" class="secondary-button smack-gif-search-button" id="smack-gif-search-button">Search</button>
+          </div>
+          <p class="smack-gif-status" id="smack-gif-status">Trending GIF suggestions</p>
+          <div class="smack-gif-grid" id="smack-gif-grid"></div>
+          <div class="button-row">
+            <button type="button" class="secondary-button smack-gif-more hidden" id="smack-gif-more">Load more</button>
+          </div>
+        </div>
+        <input type="hidden" id="smack-talk-gif-url" name="smack-talk-gif-url" value="" />
+        <div class="smack-selected-gif hidden" id="smack-selected-gif">
+          <img id="smack-selected-gif-preview" class="smack-selected-gif-preview" alt="Selected GIF preview" loading="lazy" />
+          <button type="button" class="secondary-button smack-selected-gif-clear" id="smack-selected-gif-clear">Clear GIF</button>
+        </div>
+        <input type="hidden" id="smack-compose-mode-value" value="new" />
+        <input type="hidden" id="smack-compose-target-post-id" value="" />
+        <div class="smack-talk-form-footer">
+          <p class="smack-talk-char-count" id="smack-talk-char-count">0 / ${SMACK_TALK_MAX_CHARS}</p>
+          <div class="smack-compose-buttons">
+            <button type="button" class="secondary-button smack-talk-cancel hidden" id="smack-talk-cancel">Cancel</button>
+            <button type="submit" class="secondary-button smack-talk-submit" id="smack-talk-submit">Post</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="contest-card">
+      <div class="contest-card-header">
+        <h2>Wall</h2>
+        <p>Newest posts first.</p>
+      </div>
+      <div class="smack-talk-list">
+        ${topLevelPosts.length
+          ? topLevelPosts.map((post) => {
+            const replies = repliesByParent.get(post.id) || [];
+            return `
+              <div class="smack-post-thread">
+                ${renderPostMarkup(post, { isReply: false })}
+                ${replies.length
+                  ? `<div class="smack-reply-list">${replies.map((replyPost) => renderPostMarkup(replyPost, { isReply: true })).join('')}</div>`
+                  : ''}
+              </div>
+            `;
+          }).join('')
+          : '<p class="help-text">No posts yet. Start the conversation.</p>'}
+      </div>
+    </div>
+  `;
+
+  const smackForm = pageBody.querySelector('#smack-talk-form');
+  const smackInput = pageBody.querySelector('#smack-talk-message');
+  const gifUrlInput = pageBody.querySelector('#smack-talk-gif-url');
+  const smackCount = pageBody.querySelector('#smack-talk-char-count');
+  const smackSubmit = pageBody.querySelector('#smack-talk-submit');
+  const smackCancel = pageBody.querySelector('#smack-talk-cancel');
+  const composeModeValue = pageBody.querySelector('#smack-compose-mode-value');
+  const composeTargetPostId = pageBody.querySelector('#smack-compose-target-post-id');
+  const composeModeLabel = pageBody.querySelector('#smack-compose-mode');
+  const emojiToggleButton = pageBody.querySelector('#smack-emoji-toggle');
+  const gifToggleButton = pageBody.querySelector('#smack-gif-toggle');
+  const emojiPicker = pageBody.querySelector('#smack-emoji-picker');
+  const gifPicker = pageBody.querySelector('#smack-gif-picker');
+  const emojiSearchInput = pageBody.querySelector('#smack-emoji-search');
+  const emojiGrid = pageBody.querySelector('#smack-emoji-grid');
+  const gifSearchInput = pageBody.querySelector('#smack-gif-search');
+  const gifSearchButton = pageBody.querySelector('#smack-gif-search-button');
+  const gifStatus = pageBody.querySelector('#smack-gif-status');
+  const gifGrid = pageBody.querySelector('#smack-gif-grid');
+  const gifMoreButton = pageBody.querySelector('#smack-gif-more');
+  const selectedGifWrap = pageBody.querySelector('#smack-selected-gif');
+  const selectedGifPreview = pageBody.querySelector('#smack-selected-gif-preview');
+  const clearSelectedGifButton = pageBody.querySelector('#smack-selected-gif-clear');
+
+  let gifNextCursor = '';
+  let gifActiveQuery = '';
+
+  const syncSelectedGifPreview = function () {
+    const gifUrl = normalizeSmackTalkGifUrl(gifUrlInput?.value || '');
+    const valid = isValidSmackTalkGifUrl(gifUrl);
+    if (!selectedGifWrap || !selectedGifPreview) {
+      return;
+    }
+
+    if (!gifUrl || !valid) {
+      selectedGifWrap.classList.add('hidden');
+      selectedGifPreview.removeAttribute('src');
+      return;
+    }
+
+    selectedGifWrap.classList.remove('hidden');
+    selectedGifPreview.src = gifUrl;
+  };
+
+  const renderEmojiGrid = function (query = '') {
+    if (!emojiGrid) {
+      return;
+    }
+
+    const normalizedQuery = query.trim().toLowerCase();
+    const items = SMACK_TALK_EMOJI_LIBRARY.filter((item) => {
+      if (!normalizedQuery) {
+        return true;
+      }
+      return item.keywords.includes(normalizedQuery) || item.emoji.includes(normalizedQuery);
+    });
+
+    emojiGrid.innerHTML = items.length
+      ? items.map((item) => `<button type="button" class="smack-emoji-item" data-emoji="${escapeHtml(item.emoji)}" title="${escapeHtml(item.keywords)}">${item.emoji}</button>`).join('')
+      : '<p class="help-text">No emoji found.</p>';
+
+    emojiGrid.querySelectorAll('.smack-emoji-item').forEach((button) => {
+      button.addEventListener('click', function () {
+        const emoji = button.dataset.emoji || '';
+        if (!emoji || !smackInput) {
+          return;
+        }
+        const spacer = smackInput.value && !smackInput.value.endsWith(' ') ? ' ' : '';
+        insertTextAtCursor(smackInput, `${spacer}${emoji}`);
+        updateCount();
+        smackInput.focus();
+      });
+    });
+  };
+
+  const renderGifGrid = function (items) {
+    if (!gifGrid) {
+      return;
+    }
+
+    gifGrid.innerHTML = Array.isArray(items) && items.length
+      ? items.map((item) => `
+          <button type="button" class="smack-gif-item" data-gif-url="${escapeHtml(item.url || '')}" title="${escapeHtml(item.title || 'GIF')}" >
+            <img src="${escapeHtml(item.previewUrl || item.url || '')}" alt="${escapeHtml(item.title || 'GIF suggestion')}" loading="lazy" />
+          </button>
+        `).join('')
+      : '<p class="help-text">No GIF results.</p>';
+  };
+
+  const loadGifResults = async function ({ query = '', append = false } = {}) {
+    if (!gifStatus || !gifMoreButton) {
+      return;
+    }
+
+    const requestedQuery = query.trim();
+    const cursor = append ? gifNextCursor : '';
+    gifStatus.textContent = append ? 'Loading more GIFs...' : 'Loading GIF suggestions...';
+    gifMoreButton.disabled = true;
+
+    try {
+      const result = await fetchSmackTalkGifSuggestions(requestedQuery, cursor);
+      gifActiveQuery = requestedQuery;
+      gifNextCursor = result.next || '';
+      gifStatus.textContent = requestedQuery ? `Results for "${requestedQuery}"` : 'Trending GIF suggestions';
+      if (append && gifGrid) {
+        const existing = gifGrid.innerHTML;
+        const nextItemsMarkup = result.items.map((item) => `
+          <button type="button" class="smack-gif-item" data-gif-url="${escapeHtml(item.url || '')}" title="${escapeHtml(item.title || 'GIF')}" >
+            <img src="${escapeHtml(item.previewUrl || item.url || '')}" alt="${escapeHtml(item.title || 'GIF suggestion')}" loading="lazy" />
+          </button>
+        `).join('');
+        gifGrid.innerHTML = nextItemsMarkup ? `${existing}${nextItemsMarkup}` : existing;
+      } else {
+        renderGifGrid(result.items);
+      }
+
+      gifMoreButton.classList.toggle('hidden', !gifNextCursor);
+      gifMoreButton.disabled = false;
+    } catch (error) {
+      gifStatus.textContent = error.message || 'Unable to load GIF suggestions.';
+      if (!append) {
+        renderGifGrid([]);
+      }
+      gifMoreButton.classList.add('hidden');
+      gifMoreButton.disabled = false;
+    }
+  };
+
+  const setComposeMode = function (mode = 'new', postId = '') {
+    if (!composeModeValue || !composeTargetPostId || !composeModeLabel || !smackSubmit) {
+      return;
+    }
+
+    composeModeValue.value = mode;
+    composeTargetPostId.value = postId || '';
+
+    if (mode === 'reply') {
+      const targetPost = postsById.get(postId);
+      const author = targetPost?.displayName || targetPost?.authorEmail || 'player';
+      composeModeLabel.textContent = `Replying to ${author}`;
+      smackSubmit.textContent = 'Reply';
+      smackCancel?.classList.remove('hidden');
+      if (smackInput) {
+        smackInput.value = '';
+      }
+      if (gifUrlInput) {
+        gifUrlInput.value = '';
+      }
+    } else if (mode === 'edit') {
+      const targetPost = postsById.get(postId);
+      const author = targetPost?.displayName || targetPost?.authorEmail || 'player';
+      composeModeLabel.textContent = `Editing post from ${author}`;
+      smackSubmit.textContent = 'Save Edit';
+      smackCancel?.classList.remove('hidden');
+      if (smackInput) {
+        smackInput.value = targetPost?.message || '';
+      }
+      if (gifUrlInput) {
+        gifUrlInput.value = targetPost?.gifUrl || '';
+      }
+    } else {
+      composeModeLabel.textContent = 'New post';
+      smackSubmit.textContent = 'Post';
+      smackCancel?.classList.add('hidden');
+      composeTargetPostId.value = '';
+      if (smackInput) {
+        smackInput.value = '';
+      }
+      if (gifUrlInput) {
+        gifUrlInput.value = '';
+      }
+    }
+
+    syncSelectedGifPreview();
+    updateCount();
+    smackInput?.focus();
+  };
+
+  const updateCount = function () {
+    if (!smackInput || !smackCount) {
+      return;
+    }
+    const count = smackInput.value.length;
+    smackCount.textContent = `${count} / ${SMACK_TALK_MAX_CHARS}`;
+    smackCount.classList.toggle('warn', count > SMACK_TALK_MAX_CHARS - 40);
+  };
+
+  updateCount();
+  renderEmojiGrid();
+  syncSelectedGifPreview();
+  smackInput?.addEventListener('input', updateCount);
+  gifUrlInput?.addEventListener('input', syncSelectedGifPreview);
+
+  emojiToggleButton?.addEventListener('click', function () {
+    emojiPicker?.classList.toggle('hidden');
+    gifPicker?.classList.add('hidden');
+    if (!emojiPicker?.classList.contains('hidden')) {
+      emojiSearchInput?.focus();
+    }
+  });
+
+  gifToggleButton?.addEventListener('click', async function () {
+    const opening = gifPicker?.classList.contains('hidden');
+    gifPicker?.classList.toggle('hidden');
+    emojiPicker?.classList.add('hidden');
+    if (opening) {
+      await loadGifResults({ query: gifSearchInput?.value || '', append: false });
+      gifSearchInput?.focus();
+    }
+  });
+
+  emojiSearchInput?.addEventListener('input', function () {
+    renderEmojiGrid(emojiSearchInput.value || '');
+  });
+
+  const runGifSearch = async function () {
+    await loadGifResults({ query: gifSearchInput?.value || '', append: false });
+  };
+
+  gifSearchButton?.addEventListener('click', runGifSearch);
+  gifSearchInput?.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runGifSearch();
+    }
+  });
+
+  gifMoreButton?.addEventListener('click', function () {
+    if (!gifNextCursor) {
+      return;
+    }
+    loadGifResults({ query: gifActiveQuery, append: true });
+  });
+
+  clearSelectedGifButton?.addEventListener('click', function () {
+    if (gifUrlInput) {
+      gifUrlInput.value = '';
+    }
+    syncSelectedGifPreview();
+  });
+
+  gifGrid?.addEventListener('click', function (event) {
+    const target = event.target instanceof Element ? event.target.closest('.smack-gif-item') : null;
+    if (!target || !gifUrlInput) {
+      return;
+    }
+
+    const selectedUrl = target.getAttribute('data-gif-url') || '';
+    if (!selectedUrl) {
+      return;
+    }
+
+    gifUrlInput.value = normalizeSmackTalkGifUrl(selectedUrl);
+    syncSelectedGifPreview();
+  });
+
+  smackForm?.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!smackInput || !smackSubmit || !composeModeValue || !composeTargetPostId) {
+      return;
+    }
+
+    const composeMode = composeModeValue.value || 'new';
+    const targetPostId = composeTargetPostId.value || '';
+    const message = normalizeSmackTalkMessage(smackInput.value);
+    const gifUrl = normalizeSmackTalkGifUrl(gifUrlInput?.value || '');
+    if (!message || message.length > SMACK_TALK_MAX_CHARS) {
+      showMessage(`Message must be 1 to ${SMACK_TALK_MAX_CHARS} characters.`);
+      return;
+    }
+
+    if (!isValidSmackTalkGifUrl(gifUrl)) {
+      showMessage('Enter a valid GIF URL (https://...gif, Giphy, or direct GIF host).');
+      return;
+    }
+
+    const activeEntry = ensureActiveEntryId();
+    const entryId = getServerEntryId(getEntryId(activeEntry));
+
+    smackSubmit.disabled = true;
+    const originalButtonText = smackSubmit.textContent;
+    smackSubmit.textContent = 'Posting...';
+    try {
+      if (composeMode === 'reply' && targetPostId) {
+        await createSmackTalkReply(message, targetPostId, entryId, gifUrl);
+        showMessage('Reply posted.');
+      } else if (composeMode === 'edit' && targetPostId) {
+        await updateSmackTalkPost(targetPostId, message, gifUrl);
+        showMessage('Post updated.');
+      } else {
+        await createSmackTalkPost(message, entryId, gifUrl);
+        showMessage('Posted to Smack Talk.');
+      }
+
+      await renderSmackTalkPage();
+    } catch (error) {
+      const fallback = composeMode === 'edit'
+        ? 'Unable to update Smack Talk post.'
+        : (composeMode === 'reply' ? 'Unable to post reply.' : 'Unable to post to Smack Talk.');
+      showMessage(error.message || fallback);
+    } finally {
+      smackSubmit.disabled = false;
+      smackSubmit.textContent = originalButtonText;
+    }
+  });
+
+  smackCancel?.addEventListener('click', function () {
+    setComposeMode('new');
+  });
+
+  pageBody.querySelectorAll('.smack-post-reply-button').forEach((button) => {
+    button.addEventListener('click', function () {
+      const postId = button.dataset.postId || '';
+      if (!postId) {
+        return;
+      }
+      setComposeMode('reply', postId);
+    });
+  });
+
+  pageBody.querySelectorAll('.smack-post-edit-button').forEach((button) => {
+    button.addEventListener('click', function () {
+      const postId = button.dataset.postId || '';
+      if (!postId) {
+        return;
+      }
+      setComposeMode('edit', postId);
+    });
+  });
+
+  pageBody.querySelectorAll('.smack-post-delete').forEach((button) => {
+    button.addEventListener('click', function () {
+      const postId = button.dataset.postId || '';
+      const authorLabel = button.dataset.author || 'this user';
+      if (!postId) {
+        return;
+      }
+
+      showConfirmPopup({
+        title: 'Delete Smack Talk Post',
+        message: `Remove this post from ${authorLabel}?`,
+        confirmText: 'Delete',
+        onConfirm: async function () {
+          button.disabled = true;
+          try {
+            await deleteSmackTalkPost(postId);
+            showMessage('Smack Talk post deleted.');
+            await renderSmackTalkPage();
+          } catch (error) {
+            showMessage(error.message || 'Unable to delete Smack Talk post.');
+          } finally {
+            button.disabled = false;
+          }
+        }
+      });
+    });
+  });
 }
 
 async function renderNewsPage() {

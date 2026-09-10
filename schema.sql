@@ -42,6 +42,49 @@ create table if not exists public.user_entries (
   unique (owner_email, display_name)
 );
 
+create table if not exists public.smack_talk_posts (
+  id uuid primary key default gen_random_uuid(),
+  author_email text not null references public.users(email) on delete cascade,
+  author_display_name text not null,
+  message text not null check (char_length(message) between 1 and 500),
+  gif_url text,
+  parent_post_id uuid references public.smack_talk_posts(id) on delete cascade,
+  edited_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- Smack Talk cooldown and deletion permissions are enforced in the Node API layer.
+
+alter table public.smack_talk_posts
+  add column if not exists gif_url text;
+
+alter table public.smack_talk_posts
+  add column if not exists parent_post_id uuid references public.smack_talk_posts(id) on delete cascade;
+
+alter table public.smack_talk_posts
+  add column if not exists edited_at timestamptz;
+
+alter table public.smack_talk_posts
+  drop constraint if exists smack_talk_posts_parent_not_self_check;
+
+alter table public.smack_talk_posts
+  add constraint smack_talk_posts_parent_not_self_check
+  check (parent_post_id is null or parent_post_id <> id);
+
+alter table public.smack_talk_posts
+  drop constraint if exists smack_talk_posts_gif_url_check;
+
+alter table public.smack_talk_posts
+  add constraint smack_talk_posts_gif_url_check
+  check (
+    gif_url is null
+    or (
+      char_length(gif_url) <= 1000
+      and gif_url ~* '^https?://'
+      and (gif_url ~* '\\.gif($|[?])' or gif_url ~* 'giphy|tenor')
+    )
+  );
+
 alter table public.standings_users
   add column if not exists joined_contests jsonb not null default '[]'::jsonb;
 
@@ -59,6 +102,8 @@ create index if not exists sessions_expires_at_idx on public.sessions(expires_at
 create index if not exists standings_users_updated_at_idx on public.standings_users(updated_at desc);
 create index if not exists user_entries_owner_email_idx on public.user_entries(owner_email);
 create index if not exists user_entries_updated_at_idx on public.user_entries(updated_at desc);
+create index if not exists smack_talk_posts_created_at_idx on public.smack_talk_posts(created_at desc);
+create index if not exists smack_talk_posts_parent_post_id_idx on public.smack_talk_posts(parent_post_id);
 
 create or replace function public.enforce_user_entry_limit()
 returns trigger
@@ -89,8 +134,10 @@ alter table public.users enable row level security;
 alter table public.sessions enable row level security;
 alter table public.standings_users enable row level security;
 alter table public.user_entries enable row level security;
+alter table public.smack_talk_posts enable row level security;
 
 revoke all on public.users from anon, authenticated;
 revoke all on public.sessions from anon, authenticated;
 revoke all on public.standings_users from anon, authenticated;
 revoke all on public.user_entries from anon, authenticated;
+revoke all on public.smack_talk_posts from anon, authenticated;
