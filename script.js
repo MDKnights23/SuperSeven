@@ -3536,21 +3536,28 @@ async function renderSmackTalkPage() {
       String(reaction.emoji || ''),
       {
         count: Number(reaction.count) || 0,
-        reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser)
+        reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser),
+        reactors: Array.isArray(reaction.reactors) ? reaction.reactors : []
       }
     ]));
     const knownReactionSet = new Set(SMACK_TALK_REACTION_CHOICES);
     const displayReactions = [
       ...SMACK_TALK_REACTION_CHOICES.map((emoji) => {
-        const details = reactionMap.get(emoji) || { count: 0, reactedByCurrentUser: false };
-        return { emoji, count: details.count, reactedByCurrentUser: details.reactedByCurrentUser };
+        const details = reactionMap.get(emoji) || { count: 0, reactedByCurrentUser: false, reactors: [] };
+        return {
+          emoji,
+          count: details.count,
+          reactedByCurrentUser: details.reactedByCurrentUser,
+          reactors: Array.isArray(details.reactors) ? details.reactors : []
+        };
       }),
       ...rawReactions
         .filter((reaction) => reaction?.emoji && !knownReactionSet.has(reaction.emoji))
         .map((reaction) => ({
           emoji: reaction.emoji,
           count: Number(reaction.count) || 0,
-          reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser)
+          reactedByCurrentUser: Boolean(reaction.reactedByCurrentUser),
+          reactors: Array.isArray(reaction.reactors) ? reaction.reactors : []
         }))
     ];
     return `
@@ -3565,18 +3572,25 @@ async function renderSmackTalkPage() {
         <p class="smack-post-message">${safeMessage}</p>
         ${post.gifUrl ? `<div class="smack-post-gif-wrap"><img class="smack-post-gif" src="${escapeHtml(post.gifUrl)}" alt="GIF shared by ${escapeHtml(post.displayName || post.authorEmail || 'player')}" loading="lazy" /></div>` : ''}
         <div class="smack-post-reactions">
-          ${displayReactions.map((reaction) => `
+          ${displayReactions.map((reaction) => {
+            const reactedBy = Array.isArray(reaction.reactors) ? reaction.reactors.filter(Boolean) : [];
+            const hoverText = reactedBy.length
+              ? `Reacted by: ${reactedBy.join(', ')}`
+              : `React with ${reaction.emoji || 'emoji'}`;
+            return `
             <button
               type="button"
               class="smack-reaction-button${reaction.reactedByCurrentUser ? ' is-active' : ''}"
               data-post-id="${escapeHtml(post.id || '')}"
               data-emoji="${escapeHtml(reaction.emoji || '')}"
-              aria-label="React with ${escapeHtml(reaction.emoji || 'emoji')}"
+              aria-label="${escapeHtml(hoverText)}"
+              title="${escapeHtml(hoverText)}"
             >
               <span class="smack-reaction-emoji">${escapeHtml(reaction.emoji || '')}</span>
               ${reaction.count > 0 ? `<span class="smack-reaction-count">${reaction.count}</span>` : ''}
             </button>
-          `).join('')}
+          `;
+          }).join('')}
           <div class="smack-reaction-more-wrap">
             <button
               type="button"

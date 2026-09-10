@@ -446,10 +446,32 @@ async function listSmackTalkPosts(limit = 200) {
     .in('post_id', postIds);
   if (reactionsError) throw reactionsError;
 
+  const reactorEmails = Array.from(new Set((reactionRows || [])
+    .map((row) => String(row.reactor_email || '').trim().toLowerCase())
+    .filter(Boolean)));
+
+  const displayNameByEmail = new Map();
+  if (reactorEmails.length) {
+    const { data: standingsRows, error: standingsError } = await supabase
+      .from('standings_users')
+      .select('email, display_name')
+      .in('email', reactorEmails);
+    if (standingsError) throw standingsError;
+
+    for (const row of (standingsRows || [])) {
+      const email = String(row.email || '').trim().toLowerCase();
+      if (!email) {
+        continue;
+      }
+      displayNameByEmail.set(email, sanitizeDisplayName(row.display_name || row.email, email));
+    }
+  }
+
   const reactionsByPost = new Map();
   for (const row of (reactionRows || [])) {
     const postId = String(row.post_id || '').trim();
     const reactionEmoji = sanitizeSmackTalkReactionEmoji(row.emoji);
+    const reactorEmail = String(row.reactor_email || '').trim().toLowerCase();
     if (!postId || !reactionEmoji) {
       continue;
     }
@@ -460,12 +482,15 @@ async function listSmackTalkPosts(limit = 200) {
 
     const emojiMap = reactionsByPost.get(postId);
     if (!emojiMap.has(reactionEmoji)) {
-      emojiMap.set(reactionEmoji, { count: 0, reactors: new Set() });
+      emojiMap.set(reactionEmoji, { count: 0, reactors: new Set(), reactorEmails: new Set() });
     }
 
     const reactionInfo = emojiMap.get(reactionEmoji);
     reactionInfo.count += 1;
-    reactionInfo.reactors.add(String(row.reactor_email || '').trim().toLowerCase());
+    if (reactorEmail) {
+      reactionInfo.reactorEmails.add(reactorEmail);
+      reactionInfo.reactors.add(displayNameByEmail.get(reactorEmail) || reactorEmail);
+    }
   }
 
   return posts.map((post) => {
@@ -474,7 +499,8 @@ async function listSmackTalkPosts(limit = 200) {
       .map(([emoji, info]) => ({
         emoji,
         count: Number(info.count) || 0,
-        reactors: Array.from(info.reactors)
+        reactors: Array.from(info.reactors),
+        reactorEmails: Array.from(info.reactorEmails)
       }))
       .sort((left, right) => {
         if (right.count !== left.count) {
@@ -906,7 +932,8 @@ async function handleApi(request, response) {
         reactions: (post.reactions || []).map((reaction) => ({
           emoji: reaction.emoji,
           count: reaction.count,
-          reactedByCurrentUser: (reaction.reactors || []).includes(normalizedSessionEmail)
+          reactedByCurrentUser: (reaction.reactorEmails || []).includes(normalizedSessionEmail),
+          reactors: Array.isArray(reaction.reactors) ? reaction.reactors : []
         }))
       }));
       return sendJson(response, 200, { posts: decoratedPosts });
