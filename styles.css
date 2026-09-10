@@ -820,7 +820,7 @@ button:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0.75rem;
-  align-items: center;
+  align-items: start;
 }
 
 .mini-team-block {
@@ -835,7 +835,7 @@ button:hover {
 
 .mini-team-topline {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
   font-weight: 700;
@@ -848,9 +848,12 @@ button:hover {
 }
 
 .mini-team-line {
+  display: inline-block;
+  min-width: 2.75rem;
   font-size: 0.76rem;
   color: #a5b4fc;
   white-space: nowrap;
+  text-align: right;
 }
 
 .mini-vs {
@@ -918,6 +921,41 @@ button:hover {
   color: #facc15;
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.mini-matchup-scoreboard {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.mini-score {
+  line-height: 1.2;
+}
+
+.mini-score-divider {
+  color: #94a3b8;
+}
+
+.mini-score-win {
+  color: #86efac;
+}
+
+.mini-score-loss {
+  color: #fca5a5;
+}
+
+.mini-score-push {
+  color: #fde68a;
+}
+
+.mini-score-pending {
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 .page-content {

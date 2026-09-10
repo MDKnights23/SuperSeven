@@ -425,6 +425,55 @@ function getWeekZeroChoiceForTeam(team, selections = selectedTeams) {
   return null;
 }
 
+function getFirstGameKickoffForTeam(team) {
+  const normalizedTeam = normalizeTeamName(team);
+  if (!normalizedTeam) {
+    return null;
+  }
+
+  let earliestKickoff = null;
+  for (const weekData of contests.super7.weeks || []) {
+    if (!weekData || isWeekZero(weekData.week)) {
+      continue;
+    }
+
+    const matchups = Array.isArray(weekData.matchups) ? weekData.matchups : [];
+    for (const matchup of matchups) {
+      if (!matchup) {
+        continue;
+      }
+
+      const awayTeam = normalizeTeamName(matchup.away);
+      const homeTeam = normalizeTeamName(matchup.home);
+      if (awayTeam !== normalizedTeam && homeTeam !== normalizedTeam) {
+        continue;
+      }
+
+      const kickoff = getMatchupKickoffDate(matchup, weekData.week);
+      if (!earliestKickoff || kickoff < earliestKickoff) {
+        earliestKickoff = kickoff;
+      }
+    }
+  }
+
+  return earliestKickoff;
+}
+
+function isWeekZeroTeamLocked(team, now = new Date()) {
+  const kickoff = getFirstGameKickoffForTeam(team);
+  if (!kickoff) {
+    return false;
+  }
+  return now >= kickoff;
+}
+
+function canUserPickWeekZeroTeam(team, email = currentUserEmail) {
+  if (isCurrentUserCommissioner(email)) {
+    return true;
+  }
+  return !isWeekZeroTeamLocked(team);
+}
+
 function formatLockLabel(week, lockValue) {
   if (!lockValue) {
     return '';
@@ -1009,19 +1058,32 @@ function isContestJoined(contestId) {
 }
 
 function loadTestScores() {
+  const seededScores = {
+    '1|New England Patriots@Seattle Seahawks': {
+      awayScore: 10,
+      homeScore: 13
+    }
+  };
+
   try {
-    localStorage.removeItem('super7-test-scores');
+    const savedScores = JSON.parse(localStorage.getItem('super7-test-scores') || '{}');
+    if (!savedScores || typeof savedScores !== 'object') {
+      return seededScores;
+    }
+    return {
+      ...seededScores,
+      ...savedScores
+    };
   } catch {
-    // ignore
+    return seededScores;
   }
-  return {};
 }
 
 function saveTestScores() {
   try {
-    localStorage.removeItem('super7-test-scores');
+    localStorage.setItem('super7-test-scores', JSON.stringify(testScores || {}));
   } catch {
-    // ignore
+    // ignore storage errors
   }
 }
 
@@ -1661,6 +1723,64 @@ function getPickOutcome(pick, matchup) {
   };
 }
 
+function getMatchupSpreadScoreResult(week, matchup) {
+  const key = `${week}|${matchup.away}@${matchup.home}`;
+  const override = testScores && testScores[key];
+  if (!override) {
+    return {
+      hasResult: false,
+      awayScore: null,
+      homeScore: null,
+      awayClass: '',
+      homeClass: ''
+    };
+  }
+
+  const awayScore = Number(override.awayScore);
+  const homeScore = Number(override.homeScore);
+  const spread = Number(matchup.homeLine);
+
+  if (!Number.isFinite(awayScore) || !Number.isFinite(homeScore) || !Number.isFinite(spread)) {
+    return {
+      hasResult: false,
+      awayScore: null,
+      homeScore: null,
+      awayClass: '',
+      homeClass: ''
+    };
+  }
+
+  const homeCoverMargin = homeScore - awayScore + spread;
+  const isPush = Math.abs(homeCoverMargin) < 0.5;
+  if (isPush) {
+    return {
+      hasResult: true,
+      awayScore,
+      homeScore,
+      awayClass: 'push',
+      homeClass: 'push'
+    };
+  }
+
+  if (homeCoverMargin > 0) {
+    return {
+      hasResult: true,
+      awayScore,
+      homeScore,
+      awayClass: 'loss',
+      homeClass: 'win'
+    };
+  }
+
+  return {
+    hasResult: true,
+    awayScore,
+    homeScore,
+    awayClass: 'win',
+    homeClass: 'loss'
+  };
+}
+
 function getStandingsRows() {
   const activeEntry = ensureActiveEntryId();
   const activeId = getEntryId(activeEntry);
@@ -1852,6 +1972,11 @@ function updatePickedTeam(week, matchupIdentifier, team) {
 
 function updateWeekZeroPickedTeam(week, team, choice) {
   const normalizedTeam = normalizeTeamName(team);
+  if (!canUserPickWeekZeroTeam(normalizedTeam, currentUserEmail)) {
+    showMessage(`${normalizedTeam} is locked because its first game has already started.`);
+    return;
+  }
+
   const selectionKey = getWeekZeroSelectionKey(normalizedTeam, choice);
   selectedTeams = normalizeSelectedTeamsForWeek(week, selectedTeams);
 
@@ -1901,6 +2026,24 @@ async function saveWeekPicks(playerId = null) {
     selectedTeams = selectedTeams.filter((team) => !offTeams.has(normalizeTeamName(team)));
     if (selectedLock && offTeams.has(normalizeTeamName(selectedLock))) {
       selectedLock = null;
+    }
+  } else {
+    const lockedTeams = new Set(
+      (weekData.winTotals || [])
+        .map((entry) => normalizeTeamName(entry.team))
+        .filter((team) => !canUserPickWeekZeroTeam(team, currentUserEmail))
+    );
+
+    selectedTeams = selectedTeams.filter((selectionKey) => {
+      const parsed = parseWeekZeroSelectionKey(selectionKey);
+      return parsed && !lockedTeams.has(parsed.team);
+    });
+
+    if (selectedLock) {
+      const parsedLock = parseWeekZeroSelectionKey(selectedLock);
+      if (!parsedLock || lockedTeams.has(parsedLock.team)) {
+        selectedLock = null;
+      }
     }
   }
 
@@ -2339,6 +2482,10 @@ function renderHomePage() {
           const homePlayers = (selectionsByTeam.get(homeTeam) || []).map(({ player, pick }) => getHomePageSelectionMarkup(player, pick)).join('');
           const awayPickers = awayPlayers ? `<div class="avatar-row">${awayPlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
           const homePickers = homePlayers ? `<div class="avatar-row">${homePlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
+          const spreadScoreResult = getMatchupSpreadScoreResult(currentWeek, matchup);
+          const scoreMarkup = spreadScoreResult.hasResult
+            ? `<div class="mini-matchup-scoreboard"><span class="mini-score mini-score-${spreadScoreResult.awayClass}">${escapeHtml(awayTeam)} ${spreadScoreResult.awayScore}</span><span class="mini-score-divider">-</span><span class="mini-score mini-score-${spreadScoreResult.homeClass}">${escapeHtml(homeTeam)} ${spreadScoreResult.homeScore}</span></div>`
+            : '<div class="mini-matchup-scoreboard"><span class="mini-score mini-score-pending">No final score yet</span></div>';
           return `
             <div class="mini-matchup-card">
               <div class="mini-matchup-row">
@@ -2358,6 +2505,7 @@ function renderHomePage() {
                   ${homePickers}
                 </div>
               </div>
+              ${scoreMarkup}
               <div class="mini-matchup-time">${escapeHtml(getLocalKickoffLabel(matchup, currentWeek))}</div>
             </div>
           `;
@@ -2869,10 +3017,12 @@ function renderSuper7Contest() {
               const underSelected = selectedChoice === 'under';
               const overSelected = selectedChoice === 'over';
               const selectedKey = underSelected ? underKey : overSelected ? overKey : null;
+              const teamLocked = !canUserPickWeekZeroTeam(normalizedTeam, currentUserEmail);
+              const lockLabel = teamLocked ? `First game has started for ${entry.team}` : '';
               return `
                 <div class="week-zero-row">
                   <div class="week-zero-side week-zero-side-under">
-                    <button type="button" class="select-team-button week-zero-under${underSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="under">Under</button>
+                    <button type="button" class="select-team-button week-zero-under${underSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="under" ${teamLocked ? `disabled title="${lockLabel}"` : ''}>Under</button>
                     ${underSelected ? `<button type="button" class="super-lock-toggle week-zero-lock-toggle${selectedLock === underKey ? ' active' : ''}" data-selection-key="${underKey}" aria-label="${selectedLock === underKey ? 'Remove Super Lock from' : 'Set Super Lock on'} ${entry.team} under">${selectedLock === underKey ? '🔒' : '🔓'}</button>` : ''}
                   </div>
                   <div class="week-zero-team-line">
@@ -2880,7 +3030,7 @@ function renderSuper7Contest() {
                     <span>${entry.winTotal} wins</span>
                   </div>
                   <div class="week-zero-side week-zero-side-over">
-                    <button type="button" class="select-team-button week-zero-over${overSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="over">Over</button>
+                    <button type="button" class="select-team-button week-zero-over${overSelected ? ' selected' : ''}" data-team="${normalizedTeam}" data-choice="over" ${teamLocked ? `disabled title="${lockLabel}"` : ''}>Over</button>
                     ${overSelected ? `<button type="button" class="super-lock-toggle week-zero-lock-toggle${selectedLock === overKey ? ' active' : ''}" data-selection-key="${overKey}" aria-label="${selectedLock === overKey ? 'Remove Super Lock from' : 'Set Super Lock on'} ${entry.team} over">${selectedLock === overKey ? '🔒' : '🔓'}</button>` : ''}
                   </div>
                 </div>
