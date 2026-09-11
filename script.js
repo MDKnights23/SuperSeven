@@ -1109,6 +1109,10 @@ function loadTestScores() {
     '1|New England Patriots@Seattle Seahawks': {
       awayScore: 10,
       homeScore: 13
+    },
+    '1|San Francisco 49ers@Los Angeles Rams': {
+      awayScore: 27,
+      homeScore: 7
     }
   };
 
