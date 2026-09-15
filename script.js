@@ -556,21 +556,22 @@ const week1Matchups = [
 ];
 
 const week2Matchups = [
-  { away: 'Minnesota Vikings', home: 'Chicago Bears', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Philadelphia Eagles', home: 'Tennessee Titans', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Green Bay Packers', home: 'New York Jets', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Carolina Panthers', home: 'Atlanta Falcons', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'New Orleans Saints', home: 'Baltimore Ravens', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Cincinnati Bengals', home: 'Houston Texans', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Cleveland Browns', home: 'Tampa Bay Buccaneers', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Pittsburgh Steelers', home: 'New England Patriots', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '12:00 PM CT' },
-  { away: 'Las Vegas Raiders', home: 'Los Angeles Chargers', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '3:05 PM CT' },
-  { away: 'Jacksonville Jaguars', home: 'Denver Broncos', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '3:05 PM CT' },
-  { away: 'Washington Commanders', home: 'Dallas Cowboys', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '3:25 PM CT' },
-  { away: 'Seattle Seahawks', home: 'Arizona Cardinals', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '3:25 PM CT' },
-  { away: 'Miami Dolphins', home: 'San Francisco 49ers', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '3:25 PM CT' },
-  { away: 'Indianapolis Colts', home: 'Kansas City Chiefs', homeLine: 'OFF', day: 'Sun', date: '9/20', time: '7:20 PM CT' },
-  { away: 'New York Giants', home: 'Los Angeles Rams', homeLine: 'OFF', day: 'Mon', date: '9/21', time: '7:15 PM CT' }
+  { away: 'Detroit Lions', home: 'Buffalo Bills', homeLine: '-4.5', day: 'Thu', date: '9/17', time: '7:15 PM CT', notes: 'Amazon' },
+  { away: 'Minnesota Vikings', home: 'Chicago Bears', homeLine: '-5.5', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'Fox' },
+  { away: 'Philadelphia Eagles', home: 'Tennessee Titans', homeLine: '+7', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'Fox' },
+  { away: 'Green Bay Packers', home: 'New York Jets', homeLine: '+4', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'Fox' },
+  { away: 'Carolina Panthers', home: 'Atlanta Falcons', homeLine: '+2.5', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'Fox' },
+  { away: 'New Orleans Saints', home: 'Baltimore Ravens', homeLine: '-8.5', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'CBS' },
+  { away: 'Cincinnati Bengals', home: 'Houston Texans', homeLine: '-3', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'CBS' },
+  { away: 'Cleveland Browns', home: 'Tampa Bay Buccaneers', homeLine: '-8.5', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'CBS' },
+  { away: 'Pittsburgh Steelers', home: 'New England Patriots', homeLine: '-5.5', day: 'Sun', date: '9/20', time: '12:00 PM CT', notes: 'CBS' },
+  { away: 'Las Vegas Raiders', home: 'Los Angeles Chargers', homeLine: '-7', day: 'Sun', date: '9/20', time: '3:05 PM CT', notes: 'CBS' },
+  { away: 'Jacksonville Jaguars', home: 'Denver Broncos', homeLine: '-3', day: 'Sun', date: '9/20', time: '3:05 PM CT', notes: 'CBS' },
+  { away: 'Washington Commanders', home: 'Dallas Cowboys', homeLine: '-4', day: 'Sun', date: '9/20', time: '3:25 PM CT', notes: 'Fox' },
+  { away: 'Seattle Seahawks', home: 'Arizona Cardinals', homeLine: '+4', day: 'Sun', date: '9/20', time: '3:25 PM CT', notes: 'Fox' },
+  { away: 'Miami Dolphins', home: 'San Francisco 49ers', homeLine: '-13.5', day: 'Sun', date: '9/20', time: '3:25 PM CT', notes: 'Fox' },
+  { away: 'Indianapolis Colts', home: 'Kansas City Chiefs', homeLine: '-6.5', day: 'Sun', date: '9/20', time: '7:20 PM CT', notes: 'NBC' },
+  { away: 'New York Giants', home: 'Los Angeles Rams', homeLine: '-7', day: 'Mon', date: '9/21', time: '7:15 PM CT', notes: 'ESPN/ABC' }
 ];
 
 const week3Matchups = [
@@ -1031,7 +1032,7 @@ function getLocalKickoffLabel(matchup, week) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  return 1;
+  return 2;
 }
 
 function loadPicks() {
