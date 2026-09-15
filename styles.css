@@ -260,6 +260,22 @@ button:hover {
   margin: 0 0 0.5rem;
 }
 
+.home-matchups-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-week-filter {
+  flex: 0 0 auto;
+  min-width: 7rem;
+}
+
+.home-week-filter select {
+  width: auto;
+}
+
 .contest-card p {
   margin: 0.5rem 0 0;
 }
@@ -1402,6 +1418,15 @@ button:hover {
 }
 
 @media (max-width: 640px) {
+  .home-matchups-header {
+    flex-direction: column;
+  }
+
+  .home-week-filter,
+  .home-week-filter select {
+    width: 100%;
+  }
+
   .smack-talk-form-footer {
     flex-direction: column;
     align-items: stretch;

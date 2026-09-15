@@ -2595,12 +2595,12 @@ function renderHomePage() {
 
   pageBody.innerHTML = `
     <div class="contest-card home-matchups-card">
-      <div class="contest-card-header">
-        <h2>Week ${displayWeek} Matchups</h2>
-        <p>See the spread and which players picked each side.</p>
-      </div>
-      <div class="picks-filter-bar">
-        <div class="picks-filter-field">
+      <div class="contest-card-header home-matchups-header">
+        <div>
+          <h2>Week ${displayWeek} Matchups</h2>
+          <p>See the spread and which players picked each side.</p>
+        </div>
+        <div class="picks-filter-field home-week-filter">
           <label for="home-week-select">Week</label>
           <select id="home-week-select">
             ${availableWeeks.map((week) => `
