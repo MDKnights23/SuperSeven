@@ -25,6 +25,7 @@ let currentUserEmail = null;
 let currentEditingPlayerName = null;
 let activeEntryId = null;
 let selectedWeek = 1;
+let homeDisplayWeek = null;
 let selectedTeam = null;
 let selectedTeams = [];
 let selectedLock = null;
@@ -2556,14 +2557,21 @@ function renderHomePage() {
   updateSiteStatusBar();
 
   const currentWeek = getCurrentContestWeek();
-  const weekData = getWeekData(currentWeek);
+  const availableWeeks = (contests.super7.weeks || [])
+    .map((weekData) => Number(weekData.week))
+    .filter((week) => Number.isFinite(week) && week > 0);
+  if (!availableWeeks.includes(Number(homeDisplayWeek))) {
+    homeDisplayWeek = currentWeek;
+  }
+  const displayWeek = homeDisplayWeek;
+  const weekData = getWeekData(displayWeek);
   const allPlayers = Array.isArray(loadStandingsUsers()) ? loadStandingsUsers() : [];
   const selectionsByTeam = new Map();
 
   allPlayers.forEach((player) => {
     const picks = Array.isArray(player?.picks) ? player.picks : [];
     picks.forEach((pick) => {
-      if (Number(pick.week) !== Number(currentWeek)) {
+      if (Number(pick.week) !== Number(displayWeek)) {
         return;
       }
 
@@ -2588,8 +2596,18 @@ function renderHomePage() {
   pageBody.innerHTML = `
     <div class="contest-card home-matchups-card">
       <div class="contest-card-header">
-        <h2>Week ${currentWeek} Matchups</h2>
+        <h2>Week ${displayWeek} Matchups</h2>
         <p>See the spread and which players picked each side.</p>
+      </div>
+      <div class="picks-filter-bar">
+        <div class="picks-filter-field">
+          <label for="home-week-select">Week</label>
+          <select id="home-week-select">
+            ${availableWeeks.map((week) => `
+              <option value="${week}" ${week === displayWeek ? 'selected' : ''}>Week ${week}</option>
+            `).join('')}
+          </select>
+        </div>
       </div>
       <div class="home-matchups-grid">
         ${matchups.map((matchup) => {
@@ -2599,7 +2617,7 @@ function renderHomePage() {
           const homePlayers = (selectionsByTeam.get(homeTeam) || []).map(({ player, pick }) => getHomePageSelectionMarkup(player, pick)).join('');
           const awayPickers = awayPlayers ? `<div class="avatar-row">${awayPlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
           const homePickers = homePlayers ? `<div class="avatar-row">${homePlayers}</div>` : '<div class="avatar-row empty">No picks</div>';
-          const spreadScoreResult = getMatchupSpreadScoreResult(currentWeek, matchup);
+          const spreadScoreResult = getMatchupSpreadScoreResult(displayWeek, matchup);
           const scoreMarkup = spreadScoreResult.hasResult
             ? `<div class="mini-matchup-scoreboard"><span class="mini-score mini-score-${spreadScoreResult.awayClass}">${escapeHtml(awayTeam)} ${spreadScoreResult.awayScore}</span><span class="mini-score-divider">-</span><span class="mini-score mini-score-${spreadScoreResult.homeClass}">${escapeHtml(homeTeam)} ${spreadScoreResult.homeScore}</span></div>`
             : '<div class="mini-matchup-scoreboard"><span class="mini-score mini-score-pending">No final score yet</span></div>';
@@ -2630,6 +2648,14 @@ function renderHomePage() {
       </div>
     </div>
   `;
+
+  const homeWeekSelect = pageBody.querySelector('#home-week-select');
+  if (homeWeekSelect) {
+    homeWeekSelect.addEventListener('change', function () {
+      homeDisplayWeek = Number(homeWeekSelect.value);
+      renderHomePage();
+    });
+  }
 }
 
 async function renderCommishPage() {
