@@ -3298,8 +3298,8 @@ function renderSuper7Contest() {
         showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
         return;
       }
-      showMessage('Picks saved. Taking you to My Picks.');
       selectPage('mypicks');
+      showPopupMessage(`Saved ${selectedTeams.length} picks for Week ${selectedWeek}.`);
     });
   }
 
@@ -4356,7 +4356,7 @@ function canRevealPickForViewer(pick, { isCurrentPlayerView, isCommissioner, now
   return now >= kickoff;
 }
 
-async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1) {
+async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = null) {
   pageTitle.textContent = 'My Picks';
   pageText.textContent = 'Your saved Super 7 selections.';
   updateSiteStatusBar();
@@ -4401,7 +4401,8 @@ async function renderMyPicksPage(selectedPlayerId = 'me', selectedWeekValue = 1)
 
   const preferredPlayerId = selectedPlayerId === 'me' ? (normalizeEntryId(activeEntryId) || players[0]?.id) : selectedPlayerId;
   const activePlayer = players.find((player) => player.id === preferredPlayerId) || players[0];
-  const activeWeek = visibleWeeks.includes(Number(selectedWeekValue)) ? Number(selectedWeekValue) : currentWeek;
+  const requestedWeek = selectedWeekValue === null ? currentWeek : Number(selectedWeekValue);
+  const activeWeek = visibleWeeks.includes(requestedWeek) ? requestedWeek : currentWeek;
   const playerPicks = (activePlayer.picks || []).sort((a, b) => a.week - b.week);
   const picksByWeek = playerPicks.reduce((groups, pick) => {
     if (!groups[pick.week]) groups[pick.week] = [];
