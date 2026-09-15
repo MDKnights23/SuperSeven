@@ -909,13 +909,23 @@ async function handleApi(request, response) {
 
       await ensureUserEntry(session.email);
 
+      const { data: memberRows, error: membersError } = await supabase
+        .from('users')
+        .select('email');
+      if (membersError) throw membersError;
+      const activeMemberEmails = new Set(
+        (memberRows || []).map((member) => String(member.email || '').trim().toLowerCase())
+      );
+
       const { data: entryRows, error: entriesError } = await supabase
         .from('user_entries')
         .select('id, owner_email, display_name, picks, super_locks, joined_contests, paid, avatar_initial, avatar_color, avatar_text_color, updated_at')
         .order('updated_at', { ascending: false });
       if (entriesError) throw entriesError;
 
-      const users = (entryRows || []).map(normalizeStandingsUserRow);
+      const users = (entryRows || [])
+        .filter((entry) => activeMemberEmails.has(String(entry.owner_email || '').trim().toLowerCase()))
+        .map(normalizeStandingsUserRow);
       return sendJson(response, 200, { users });
     }
 

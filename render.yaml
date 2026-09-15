@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: super-seven
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GIPHY_API_KEY
+        sync: false
+      - key: GIPHY_RATING
+        value: pg-13
+      - key: GIPHY_LANG
+        value: en

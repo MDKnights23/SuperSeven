@@ -1113,6 +1113,62 @@ function loadTestScores() {
     '1|San Francisco 49ers@Los Angeles Rams': {
       awayScore: 27,
       homeScore: 7
+    },
+    '1|Miami Dolphins@Las Vegas Raiders': {
+      awayScore: 13,
+      homeScore: 27
+    },
+    '1|Tampa Bay Buccaneers@Cincinnati Bengals': {
+      awayScore: 27,
+      homeScore: 33
+    },
+    '1|New Orleans Saints@Detroit Lions': {
+      awayScore: 30,
+      homeScore: 31
+    },
+    '1|New York Jets@Tennessee Titans': {
+      awayScore: 23,
+      homeScore: 10
+    },
+    '1|Baltimore Ravens@Indianapolis Colts': {
+      awayScore: 41,
+      homeScore: 23
+    },
+    '1|Atlanta Falcons@Pittsburgh Steelers': {
+      awayScore: 13,
+      homeScore: 20
+    },
+    '1|Chicago Bears@Carolina Panthers': {
+      awayScore: 59,
+      homeScore: 37
+    },
+    '1|Cleveland Browns@Jacksonville Jaguars': {
+      awayScore: 10,
+      homeScore: 34
+    },
+    '1|Buffalo Bills@Houston Texans': {
+      awayScore: 36,
+      homeScore: 31
+    },
+    '1|Green Bay Packers@Minnesota Vikings': {
+      awayScore: 22,
+      homeScore: 39
+    },
+    '1|Washington Commanders@Philadelphia Eagles': {
+      awayScore: 22,
+      homeScore: 24
+    },
+    '1|Arizona Cardinals@Los Angeles Chargers': {
+      awayScore: 26,
+      homeScore: 14
+    },
+    '1|Dallas Cowboys@New York Giants': {
+      awayScore: 20,
+      homeScore: 28
+    },
+    '1|Denver Broncos@Kansas City Chiefs': {
+      awayScore: 10,
+      homeScore: 31
     }
   };
 
@@ -1911,11 +1967,20 @@ function getStandingsRows() {
         ? '<span class="result-mark correct" title="Weekly picks made">✅</span>'
         : '<span class="result-mark incorrect" title="Weekly picks not complete">❌</span>',
       pickRecord: `${correct} - ${incorrect} - ${pushes}`,
-      superLockRecord: `${superLockCorrect} - ${superLockIncorrect} - ${superLockPushes}`
+      superLockRecord: `${superLockCorrect} - ${superLockIncorrect} - ${superLockPushes}`,
+      superLockCorrect,
+      superLockIncorrect,
+      superLockPushes
     };
   });
 
-  return standings.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+  return standings.sort((a, b) => (
+    b.points - a.points
+    || b.superLockCorrect - a.superLockCorrect
+    || a.superLockIncorrect - b.superLockIncorrect
+    || b.superLockPushes - a.superLockPushes
+    || a.name.localeCompare(b.name)
+  ));
 }
 
 function formatSelection(matchups, selectedTeam) {
