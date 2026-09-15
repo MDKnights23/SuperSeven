@@ -3293,13 +3293,15 @@ function renderSuper7Contest() {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
         return;
       }
+      const savedWeek = selectedWeek;
+      const savedPickCount = selectedTeams.length;
       const result = await saveWeekPicks(currentEditingPlayerName || activePlayer.id);
       if (result === false) {
         showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
         return;
       }
       selectPage('mypicks');
-      showPopupMessage(`Saved ${selectedTeams.length} picks for Week ${selectedWeek}.`);
+      showPopupMessage(`Saved ${savedPickCount} picks for Week ${savedWeek}.`);
     });
   }
 
