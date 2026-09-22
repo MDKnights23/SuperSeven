@@ -576,22 +576,22 @@ const week2Matchups = [
 ];
 
 const week3Matchups = [
-  { away: 'Atlanta Falcons', home: 'Green Bay Packers', homeLine: 'OFF', day: 'Thu', date: '9/24', time: '7:15 PM CT' },
-  { away: 'Kansas City Chiefs', home: 'Miami Dolphins', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Houston Texans', home: 'Indianapolis Colts', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Tennessee Titans', home: 'New York Giants', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'New England Patriots', home: 'Jacksonville Jaguars', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Cincinnati Bengals', home: 'Pittsburgh Steelers', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Carolina Panthers', home: 'Cleveland Browns', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'New York Jets', home: 'Detroit Lions', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Seattle Seahawks', home: 'Washington Commanders', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Los Angeles Chargers', home: 'Buffalo Bills', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
-  { away: 'Minnesota Vikings', home: 'Tampa Bay Buccaneers', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '3:05 PM CT' },
-  { away: 'Arizona Cardinals', home: 'San Francisco 49ers', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '3:05 PM CT' },
-  { away: 'Baltimore Ravens', home: 'Dallas Cowboys', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '3:25 PM CT', notes: 'Rio De Janeiro' },
-  { away: 'Las Vegas Raiders', home: 'New Orleans Saints', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '3:25 PM CT' },
-  { away: 'Los Angeles Rams', home: 'Denver Broncos', homeLine: 'OFF', day: 'Sun', date: '9/27', time: '7:20 PM CT' },
-  { away: 'Philadelphia Eagles', home: 'Chicago Bears', homeLine: 'OFF', day: 'Mon', date: '9/28', time: '7:15 PM CT' }
+  { away: 'Atlanta Falcons', home: 'Green Bay Packers', homeLine: '-6.5', day: 'Thu', date: '9/24', time: '7:15 PM CT' },
+  { away: 'Kansas City Chiefs', home: 'Miami Dolphins', homeLine: '+11.5', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Houston Texans', home: 'Indianapolis Colts', homeLine: '+2.5', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Tennessee Titans', home: 'New York Giants', homeLine: '-3', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'New England Patriots', home: 'Jacksonville Jaguars', homeLine: '-3', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Cincinnati Bengals', home: 'Pittsburgh Steelers', homeLine: '+3.5', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Carolina Panthers', home: 'Cleveland Browns', homeLine: '+2.5', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'New York Jets', home: 'Detroit Lions', homeLine: '-6.5', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Seattle Seahawks', home: 'Washington Commanders', homeLine: '-7', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Los Angeles Chargers', home: 'Buffalo Bills', homeLine: '-2', day: 'Sun', date: '9/27', time: '12:00 PM CT' },
+  { away: 'Minnesota Vikings', home: 'Tampa Bay Buccaneers', homeLine: '-1.5', day: 'Sun', date: '9/27', time: '3:05 PM CT' },
+  { away: 'Arizona Cardinals', home: 'San Francisco 49ers', homeLine: '-8.5', day: 'Sun', date: '9/27', time: '3:05 PM CT' },
+  { away: 'Baltimore Ravens', home: 'Dallas Cowboys', homeLine: '-3', day: 'Sun', date: '9/27', time: '3:25 PM CT', notes: 'Rio De Janeiro' },
+  { away: 'Las Vegas Raiders', home: 'New Orleans Saints', homeLine: '-3', day: 'Sun', date: '9/27', time: '3:25 PM CT' },
+  { away: 'Los Angeles Rams', home: 'Denver Broncos', homeLine: '+2.5', day: 'Sun', date: '9/27', time: '7:20 PM CT' },
+  { away: 'Philadelphia Eagles', home: 'Chicago Bears', homeLine: '+3.5', day: 'Mon', date: '9/28', time: '7:15 PM CT' }
 ];
 
 const week4Matchups = [
@@ -1033,7 +1033,7 @@ function getLocalKickoffLabel(matchup, week) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  return 2;
+  return 3;
 }
 
 function loadPicks() {
@@ -1171,6 +1171,70 @@ function loadTestScores() {
     '1|Denver Broncos@Kansas City Chiefs': {
       awayScore: 10,
       homeScore: 31
+    },
+    '2|Detroit Lions@Buffalo Bills': {
+      awayScore: 31,
+      homeScore: 41
+    },
+    '2|Minnesota Vikings@Chicago Bears': {
+      awayScore: 9,
+      homeScore: 3
+    },
+    '2|Philadelphia Eagles@Tennessee Titans': {
+      awayScore: 24,
+      homeScore: 20
+    },
+    '2|Green Bay Packers@New York Jets': {
+      awayScore: 20,
+      homeScore: 17
+    },
+    '2|Carolina Panthers@Atlanta Falcons': {
+      awayScore: 34,
+      homeScore: 3
+    },
+    '2|New Orleans Saints@Baltimore Ravens': {
+      awayScore: 24,
+      homeScore: 17
+    },
+    '2|Cincinnati Bengals@Houston Texans': {
+      awayScore: 20,
+      homeScore: 6
+    },
+    '2|Cleveland Browns@Tampa Bay Buccaneers': {
+      awayScore: 23,
+      homeScore: 19
+    },
+    '2|Pittsburgh Steelers@New England Patriots': {
+      awayScore: 3,
+      homeScore: 20
+    },
+    '2|Las Vegas Raiders@Los Angeles Chargers': {
+      awayScore: 26,
+      homeScore: 14
+    },
+    '2|Jacksonville Jaguars@Denver Broncos': {
+      awayScore: 13,
+      homeScore: 20
+    },
+    '2|Washington Commanders@Dallas Cowboys': {
+      awayScore: 20,
+      homeScore: 37
+    },
+    '2|Seattle Seahawks@Arizona Cardinals': {
+      awayScore: 31,
+      homeScore: 7
+    },
+    '2|Miami Dolphins@San Francisco 49ers': {
+      awayScore: 13,
+      homeScore: 35
+    },
+    '2|Indianapolis Colts@Kansas City Chiefs': {
+      awayScore: 30,
+      homeScore: 33
+    },
+    '2|New York Giants@Los Angeles Rams': {
+      awayScore: 6,
+      homeScore: 28
     }
   };
 
