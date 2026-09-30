@@ -595,22 +595,22 @@ const week3Matchups = [
 ];
 
 const week4Matchups = [
-  { away: 'Pittsburgh Steelers', home: 'Cleveland Browns', homeLine: 'OFF', day: 'Thu', date: '10/1', time: '7:15 PM CT' },
-  { away: 'Indianapolis Colts', home: 'Washington Commanders', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '8:30 AM CT', notes: 'London' },
-  { away: 'Tennessee Titans', home: 'Baltimore Ravens', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Arizona Cardinals', home: 'New York Giants', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Jacksonville Jaguars', home: 'Cincinnati Bengals', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'New England Patriots', home: 'Buffalo Bills', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Dallas Cowboys', home: 'Houston Texans', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Los Angeles Rams', home: 'Philadelphia Eagles', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Green Bay Packers', home: 'Tampa Bay Buccaneers', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'New York Jets', home: 'Chicago Bears', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
-  { away: 'Miami Dolphins', home: 'Minnesota Vikings', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '3:05 PM CT' },
-  { away: 'Denver Broncos', home: 'San Francisco 49ers', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
-  { away: 'Los Angeles Chargers', home: 'Seattle Seahawks', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
-  { away: 'Kansas City Chiefs', home: 'Las Vegas Raiders', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
-  { away: 'Detroit Lions', home: 'Carolina Panthers', homeLine: 'OFF', day: 'Sun', date: '10/4', time: '7:20 PM CT' },
-  { away: 'Atlanta Falcons', home: 'New Orleans Saints', homeLine: 'OFF', day: 'Mon', date: '10/5', time: '7:15 PM CT' }
+  { away: 'Pittsburgh Steelers', home: 'Cleveland Browns', homeLine: '+2.5', day: 'Thu', date: '10/1', time: '7:15 PM CT' },
+  { away: 'Indianapolis Colts', home: 'Washington Commanders', homeLine: '+3.5', day: 'Sun', date: '10/4', time: '8:30 AM CT', notes: 'London' },
+  { away: 'Tennessee Titans', home: 'Baltimore Ravens', homeLine: '-11.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Arizona Cardinals', home: 'New York Giants', homeLine: '+1.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Jacksonville Jaguars', home: 'Cincinnati Bengals', homeLine: '+2.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'New England Patriots', home: 'Buffalo Bills', homeLine: '-6.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Dallas Cowboys', home: 'Houston Texans', homeLine: '-2.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Los Angeles Rams', home: 'Philadelphia Eagles', homeLine: '+3', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Green Bay Packers', home: 'Tampa Bay Buccaneers', homeLine: '+4', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'New York Jets', home: 'Chicago Bears', homeLine: '-3.5', day: 'Sun', date: '10/4', time: '12:00 PM CT' },
+  { away: 'Miami Dolphins', home: 'Minnesota Vikings', homeLine: '-10.5', day: 'Sun', date: '10/4', time: '3:05 PM CT' },
+  { away: 'Denver Broncos', home: 'San Francisco 49ers', homeLine: '-2.5', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
+  { away: 'Los Angeles Chargers', home: 'Seattle Seahawks', homeLine: '-7', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
+  { away: 'Kansas City Chiefs', home: 'Las Vegas Raiders', homeLine: '+4.5', day: 'Sun', date: '10/4', time: '3:25 PM CT' },
+  { away: 'Detroit Lions', home: 'Carolina Panthers', homeLine: '+3.5', day: 'Sun', date: '10/4', time: '7:20 PM CT' },
+  { away: 'Atlanta Falcons', home: 'New Orleans Saints', homeLine: '-3', day: 'Mon', date: '10/5', time: '7:15 PM CT' }
 ];
 
 const week5Matchups = [
@@ -1033,7 +1033,7 @@ function getLocalKickoffLabel(matchup, week) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  return 3;
+  return 4;
 }
 
 function loadPicks() {
@@ -1295,6 +1295,10 @@ function loadTestScores() {
     '3|Los Angeles Rams@Denver Broncos': {
       awayScore: 26,
       homeScore: 30
+    },
+    '3|Philadelphia Eagles@Chicago Bears': {
+      awayScore: 7,
+      homeScore: 27
     }
   };
 
