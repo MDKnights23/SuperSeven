@@ -1299,6 +1299,10 @@ function loadTestScores() {
     '3|Philadelphia Eagles@Chicago Bears': {
       awayScore: 7,
       homeScore: 27
+    },
+    '4|Pittsburgh Steelers@Cleveland Browns': {
+      awayScore: 24,
+      homeScore: 27
     }
   };
 
