@@ -2237,6 +2237,51 @@ function getStandingsRows() {
   ));
 }
 
+function getPerfectWeekBonusRows() {
+  const activeEntry = ensureActiveEntryId();
+  const activeId = getEntryId(activeEntry);
+  const entries = loadStandingsUsers().map((user) => (
+    activeId && getEntryId(user) === activeId
+      ? { ...user, picks: myPicks, superLocks }
+      : user
+  ));
+
+  const qualifyingEntries = entries.map((entry) => {
+    const picksByWeek = (Array.isArray(entry.picks) ? entry.picks : []).reduce((groups, pick) => {
+      const week = Number(pick.week);
+      if (!Number.isFinite(week) || week < 1) {
+        return groups;
+      }
+      if (!groups[week]) {
+        groups[week] = [];
+      }
+      groups[week].push(pick);
+      return groups;
+    }, {});
+
+    const perfectWeekCount = Object.values(picksByWeek).filter((picks) => (
+      picks.length === 7 && picks.every((pick) => {
+        const outcome = getPickOutcome(pick, getMatchupForPick(pick));
+        return outcome.hasResult && outcome.correct;
+      })
+    ));
+
+    return {
+      name: entry.name || entry.email || 'Player',
+      perfectWeekCount: perfectWeekCount.length
+    };
+  }).filter((entry) => entry.perfectWeekCount > 0).sort((a, b) => (
+    b.perfectWeekCount - a.perfectWeekCount || a.name.localeCompare(b.name)
+  ));
+
+  const totalPerfectWeeks = qualifyingEntries.reduce((total, entry) => total + entry.perfectWeekCount, 0);
+  return qualifyingEntries.map((entry) => ({
+    ...entry,
+    bonusPercentage: (entry.perfectWeekCount / totalPerfectWeeks) * 100,
+    bonusAmount: (entry.perfectWeekCount / totalPerfectWeeks) * 200
+  }));
+}
+
 function formatSelection(matchups, selectedTeam) {
   const pick = myPicks.find((item) => item.team === selectedTeam);
   if (pick) {
@@ -4524,8 +4569,26 @@ async function renderNewsPage() {
   await refreshStandingsUsersFromServer();
 
   const standings = getStandingsRows();
+  const perfectWeekBonusRows = getPerfectWeekBonusRows();
   const isCommissioner = isCurrentUserCommissioner();
+  const prizeByPlace = { 0: '$250', 1: '$100', 2: '$25' };
   pageBody.innerHTML = `
+    <div class="contest-card perfect-week-bonus-card">
+      <div class="contest-card-header">
+        <h2>Perfect Week Bonus Pot</h2>
+        <p>$200 split by each entrant's share of all completed 7-0 weeks against the spread.</p>
+      </div>
+      ${perfectWeekBonusRows.length
+        ? `<ul class="perfect-week-bonus-list">
+            ${perfectWeekBonusRows.map((entry) => `
+              <li>
+                <strong>${escapeHtml(entry.name)}</strong>
+                <span>${entry.perfectWeekCount} perfect week${entry.perfectWeekCount === 1 ? '' : 's'} · ${entry.bonusPercentage.toFixed(1).replace('.0', '')}% · $${entry.bonusAmount.toFixed(2)}</span>
+              </li>
+            `).join('')}
+          </ul>`
+        : '<p class="help-text">No perfect weeks yet.</p>'}
+    </div>
     <div class="contest-card">
       <div class="contest-card-header">
         <h2>Contest Standings</h2>
@@ -4543,9 +4606,9 @@ async function renderNewsPage() {
           </tr>
         </thead>
         <tbody>
-          ${standings.map((row) => `
+          ${standings.map((row, index) => `
             <tr>
-              <td title="${escapeHtml(row.email || row.name)}">${escapeHtml(row.name)}</td>
+              <td title="${escapeHtml(row.email || row.name)}">${prizeByPlace[index] ? `<span class="standings-prize">${prizeByPlace[index]}</span> ` : ''}${escapeHtml(row.name)}</td>
               <td>${row.points}</td>
               <td>${row.pickRecord}</td>
               <td>${row.superLockRecord}</td>

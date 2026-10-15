@@ -345,6 +345,36 @@ button:hover {
   border-bottom: none;
 }
 
+.perfect-week-bonus-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.perfect-week-bonus-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.perfect-week-bonus-list li:last-child {
+  border-bottom: none;
+}
+
+.perfect-week-bonus-list span {
+  color: #cbd5e1;
+}
+
+.standings-prize {
+  margin-left: 0.35rem;
+  color: #86efac;
+  font-weight: 800;
+}
+
 .result-mark {
   display: inline-flex;
   align-items: center;
