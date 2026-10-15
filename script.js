@@ -2564,6 +2564,7 @@ async function saveWeekPicks(playerId = null) {
   saveStandingsUsers(standingsUsers);
 
   let serverSaved = false;
+  let serverSaveError = '';
   if (isOwnedByCurrentUser(mergedUser)) {
     try {
       const avatar = getAvatarConfigForEntry(mergedUser);
@@ -2583,8 +2584,13 @@ async function saveWeekPicks(playerId = null) {
         })
       });
       serverSaved = response.ok;
+      if (!serverSaved) {
+        const payload = await response.json().catch(() => null);
+        serverSaveError = payload?.error || 'The server rejected the save request.';
+      }
     } catch {
       serverSaved = false;
+      serverSaveError = 'Unable to reach the server.';
     }
   } else if (isCurrentUserCommissioner() && targetEntryId) {
     serverSaved = await saveStandingsUserPicksToServer(
@@ -2594,11 +2600,15 @@ async function saveWeekPicks(playerId = null) {
       updatedPicks,
       updatedSuperLocks
     );
+    if (!serverSaved) {
+      serverSaveError = 'The server rejected the save request.';
+    }
   }
 
   if ((isOwnedByCurrentUser(mergedUser) || targetEntryId) && !serverSaved) {
-    showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek} locally. Server sync failed.`);
-    return true;
+    const syncError = serverSaveError || 'Server sync failed.';
+    showMessage(`Saved ${selectedTeams.length} picks for ${targetName} in Week ${selectedWeek} locally. ${syncError}`);
+    return { localSaved: true, serverSaved: false, error: syncError };
   }
 
   if (isActiveTarget) {
@@ -3595,6 +3605,10 @@ function renderSuper7Contest() {
       const result = await saveWeekPicks(currentEditingPlayerName || activePlayer.id);
       if (result === false) {
         showPopupMessage('Your picks are not valid yet. You must select exactly 7 games and choose one Super Lock before saving.');
+        return;
+      }
+      if (result?.serverSaved === false) {
+        showPopupMessage(`Your picks were saved only on this device. ${result.error}`);
         return;
       }
       selectPage('mypicks');
