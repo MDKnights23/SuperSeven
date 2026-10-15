@@ -1445,7 +1445,10 @@ async function handleApi(request, response) {
     sendJson(response, 404, { error: 'Not found.' });
   } catch (error) {
     console.error(error);
-    sendJson(response, 400, { error: 'Unable to process the request.' });
+    const message = error instanceof Error && error.message
+      ? error.message
+      : 'Unable to process the request.';
+    sendJson(response, 400, { error: message });
   }
 }
 
