@@ -17,6 +17,7 @@ const COMMISSIONER_EMAIL = 'matthewhellmann2013@gmail.com';
 const SMACK_TALK_MAX_CHARS = 500;
 const SMACK_TALK_MAX_GIF_URL_CHARS = 1000;
 const SMACK_TALK_MAX_REACTION_CHARS = 16;
+const MAX_REQUEST_BODY_BYTES = 256 * 1024;
 const SMACK_TALK_COOLDOWN_SECONDS = 10;
 const GIPHY_API_KEY = (process.env.GIPHY_API_KEY || '').trim();
 const GIPHY_RATING = (process.env.GIPHY_RATING || 'pg-13').trim();
@@ -93,12 +94,14 @@ function verifyPassword(password, storedHash) {
 }
 
 async function readRequestBody(request) {
-  let body = '';
+  const chunks = [];
+  let byteLength = 0;
   for await (const chunk of request) {
-    body += chunk;
-    if (body.length > 10_000) throw new Error('Request body too large.');
+    byteLength += chunk.length;
+    if (byteLength > MAX_REQUEST_BODY_BYTES) throw new Error('Request body too large.');
+    chunks.push(chunk);
   }
-  return JSON.parse(body || '{}');
+  return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 }
 
 function validEmail(email) {
