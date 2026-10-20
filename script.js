@@ -649,20 +649,20 @@ const week6Matchups = [
 ];
 
 const week7Matchups = [
-  { away: 'New England Patriots', home: 'Chicago Bears', homeLine: 'OFF', day: 'Thu', date: '10/22', time: '7:15 PM CT' },
-  { away: 'Pittsburgh Steelers', home: 'New Orleans Saints', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '8:30 AM CT', notes: 'Paris' },
-  { away: 'Cleveland Browns', home: 'Tennessee Titans', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'Miami Dolphins', home: 'New York Jets', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'Indianapolis Colts', home: 'Minnesota Vikings', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'Cincinnati Bengals', home: 'Baltimore Ravens', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'New York Giants', home: 'Houston Texans', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'Tampa Bay Buccaneers', home: 'Carolina Panthers', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'San Francisco 49ers', home: 'Atlanta Falcons', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
-  { away: 'Denver Broncos', home: 'Arizona Cardinals', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '3:05 PM CT' },
-  { away: 'Los Angeles Rams', home: 'Las Vegas Raiders', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '3:25 PM CT' },
-  { away: 'Green Bay Packers', home: 'Detroit Lions', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '3:25 PM CT' },
-  { away: 'Kansas City Chiefs', home: 'Seattle Seahawks', homeLine: 'OFF', day: 'Sun', date: '10/25', time: '7:20 PM CT' },
-  { away: 'Dallas Cowboys', home: 'Philadelphia Eagles', homeLine: 'OFF', day: 'Mon', date: '10/26', time: '7:15 PM CT' }
+  { away: 'New England Patriots', home: 'Chicago Bears', homeLine: '-3', day: 'Thu', date: '10/22', time: '7:15 PM CT' },
+  { away: 'Pittsburgh Steelers', home: 'New Orleans Saints', homeLine: '+3.5', day: 'Sun', date: '10/25', time: '8:30 AM CT', notes: 'Paris' },
+  { away: 'Tampa Bay Buccaneers', home: 'Carolina Panthers', homeLine: '-3.5', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'Miami Dolphins', home: 'New York Jets', homeLine: '-5', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'Cleveland Browns', home: 'Tennessee Titans', homeLine: '+2', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'New York Giants', home: 'Houston Texans', homeLine: '-10', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'San Francisco 49ers', home: 'Atlanta Falcons', homeLine: '+3', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'Indianapolis Colts', home: 'Minnesota Vikings', homeLine: '-6.5', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'Cincinnati Bengals', home: 'Baltimore Ravens', homeLine: '+3', day: 'Sun', date: '10/25', time: '12:00 PM CT' },
+  { away: 'Denver Broncos', home: 'Arizona Cardinals', homeLine: '+4', day: 'Sun', date: '10/25', time: '3:05 PM CT' },
+  { away: 'Los Angeles Rams', home: 'Las Vegas Raiders', homeLine: '+4', day: 'Sun', date: '10/25', time: '3:25 PM CT' },
+  { away: 'Green Bay Packers', home: 'Detroit Lions', homeLine: '-3', day: 'Sun', date: '10/25', time: '3:25 PM CT' },
+  { away: 'Kansas City Chiefs', home: 'Seattle Seahawks', homeLine: '-2.5', day: 'Sun', date: '10/25', time: '7:20 PM CT' },
+  { away: 'Dallas Cowboys', home: 'Philadelphia Eagles', homeLine: '+4.5', day: 'Mon', date: '10/26', time: '7:15 PM CT' }
 ];
 
 const week8Matchups = [
@@ -1033,7 +1033,7 @@ function getLocalKickoffLabel(matchup, week) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  return 6;
+  return 7;
 }
 
 function loadPicks() {
@@ -1423,6 +1423,62 @@ function loadTestScores() {
     '5|Buffalo Bills@Los Angeles Rams': {
       awayScore: 37,
       homeScore: 34
+    },
+    '6|Seattle Seahawks@Denver Broncos': {
+      awayScore: 14,
+      homeScore: 17
+    },
+    '6|Houston Texans@Jacksonville Jaguars': {
+      awayScore: 34,
+      homeScore: 31
+    },
+    '6|New York Jets@New England Patriots': {
+      awayScore: 19,
+      homeScore: 26
+    },
+    '6|Pittsburgh Steelers@Tampa Bay Buccaneers': {
+      awayScore: 26,
+      homeScore: 19
+    },
+    '6|Carolina Panthers@Philadelphia Eagles': {
+      awayScore: 25,
+      homeScore: 14
+    },
+    '6|Chicago Bears@Atlanta Falcons': {
+      awayScore: 31,
+      homeScore: 23
+    },
+    '6|Tennessee Titans@Indianapolis Colts': {
+      awayScore: 26,
+      homeScore: 20
+    },
+    '6|New Orleans Saints@New York Giants': {
+      awayScore: 34,
+      homeScore: 27
+    },
+    '6|Baltimore Ravens@Cleveland Browns': {
+      awayScore: 10,
+      homeScore: 13
+    },
+    '6|Arizona Cardinals@Los Angeles Rams': {
+      awayScore: 18,
+      homeScore: 16
+    },
+    '6|Los Angeles Chargers@Kansas City Chiefs': {
+      awayScore: 6,
+      homeScore: 22
+    },
+    '6|Buffalo Bills@Las Vegas Raiders': {
+      awayScore: 33,
+      homeScore: 30
+    },
+    '6|Dallas Cowboys@Green Bay Packers': {
+      awayScore: 13,
+      homeScore: 23
+    },
+    '6|Washington Commanders@San Francisco 49ers': {
+      awayScore: 17,
+      homeScore: 23
     }
   };
 
