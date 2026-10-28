@@ -1479,6 +1479,62 @@ function loadTestScores() {
     '6|Washington Commanders@San Francisco 49ers': {
       awayScore: 17,
       homeScore: 23
+    },
+    '7|New England Patriots@Chicago Bears': {
+      awayScore: 24,
+      homeScore: 30
+    },
+    '7|Pittsburgh Steelers@New Orleans Saints': {
+      awayScore: 16,
+      homeScore: 10
+    },
+    '7|Tampa Bay Buccaneers@Carolina Panthers': {
+      awayScore: 43,
+      homeScore: 13
+    },
+    '7|Miami Dolphins@New York Jets': {
+      awayScore: 28,
+      homeScore: 25
+    },
+    '7|Cleveland Browns@Tennessee Titans': {
+      awayScore: 27,
+      homeScore: 24
+    },
+    '7|New York Giants@Houston Texans': {
+      awayScore: 27,
+      homeScore: 21
+    },
+    '7|San Francisco 49ers@Atlanta Falcons': {
+      awayScore: 20,
+      homeScore: 29
+    },
+    '7|Indianapolis Colts@Minnesota Vikings': {
+      awayScore: 10,
+      homeScore: 16
+    },
+    '7|Cincinnati Bengals@Baltimore Ravens': {
+      awayScore: 35,
+      homeScore: 13
+    },
+    '7|Denver Broncos@Arizona Cardinals': {
+      awayScore: 30,
+      homeScore: 16
+    },
+    '7|Los Angeles Rams@Las Vegas Raiders': {
+      awayScore: 35,
+      homeScore: 21
+    },
+    '7|Green Bay Packers@Detroit Lions': {
+      awayScore: 17,
+      homeScore: 20
+    },
+    '7|Kansas City Chiefs@Seattle Seahawks': {
+      awayScore: 3,
+      homeScore: 20
+    },
+    '7|Dallas Cowboys@Philadelphia Eagles': {
+      awayScore: 38,
+      homeScore: 21
     }
   };
 
