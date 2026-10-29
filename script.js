@@ -2108,8 +2108,8 @@ function getMatchupKickoffDate(matchup, week) {
   return kickoff;
 }
 
-function canEditMatchup(matchup, week) {
-  if (!canEditPicksForWeek(week)) {
+function canEditMatchup(matchup, week, email = currentUserEmail, playerId = 'me') {
+  if (!canEditPicksForWeek(week, email, playerId)) {
     return false;
   }
 
@@ -2576,7 +2576,7 @@ async function saveWeekPicks(playerId = null) {
 
     const lockedSelectedTeam = selectedTeams.find((team) => {
       const matchup = weekData.matchups.find((entry) => entry.away === team || entry.home === team);
-      return matchup && !canEditMatchup(matchup, selectedWeek);
+      return matchup && !canEditMatchup(matchup, selectedWeek, currentUserEmail, playerId || activeEntryId);
     });
     if (lockedSelectedTeam) {
       showMessage(`${lockedSelectedTeam} is locked because its game has started.`);
@@ -3637,7 +3637,7 @@ function renderSuper7Contest() {
               const matchupKey = getMatchupKey(matchup);
               const matchupKickoffLabel = getLocalKickoffLabel(matchup, activeWeek);
               const matchupNotes = matchup.notes || '';
-              const isMatchupEditable = !isOffLine && canEditMatchup(matchup, activeWeek);
+              const isMatchupEditable = !isOffLine && canEditMatchup(matchup, activeWeek, currentUserEmail, activePlayer.id);
               const matchupLockLabel = isOffLine
                 ? 'This game is on bye.'
                 : 'This game is locked because kickoff has started.';
@@ -3726,7 +3726,7 @@ function renderSuper7Contest() {
         return;
       }
       const matchup = getWeekData(selectedWeek)?.matchups?.find((entry) => getMatchupKey(entry) === button.dataset.matchupKey);
-      if (matchup && !canEditMatchup(matchup, selectedWeek)) {
+      if (matchup && !canEditMatchup(matchup, selectedWeek, currentUserEmail, activePlayer.id)) {
         showPopupMessage('This game is locked because kickoff has started.');
         return;
       }
