@@ -702,7 +702,7 @@ const week9Matchups = [
 
 const week10Matchups = [
   { away: 'Washington Commanders', home: 'New York Giants', homeLine: '-2.5', day: 'Thu', date: '11/12', time: '7:15 PM CT' },
-  { away: 'New England Patriots', home: 'Detroit Lions', homeLine: '+2.5', day: 'Sun', date: '11/15', time: '8:30 AM CT', notes: 'Munich, Germany' },
+  { away: 'New England Patriots', home: 'Detroit Lions', homeLine: '-2.5', day: 'Sun', date: '11/15', time: '8:30 AM CT', notes: 'Munich, Germany' },
   { away: 'Buffalo Bills', home: 'New York Jets', homeLine: '+7.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
   { away: 'Miami Dolphins', home: 'Indianapolis Colts', homeLine: '-4', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
   { away: 'Kansas City Chiefs', home: 'Atlanta Falcons', homeLine: '+3.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
