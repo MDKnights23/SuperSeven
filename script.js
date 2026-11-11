@@ -666,20 +666,20 @@ const week7Matchups = [
 ];
 
 const week8Matchups = [
-  { away: 'Carolina Panthers', home: 'Green Bay Packers', homeLine: '-3.5', day: 'Thu', date: '10/29', time: '7:15 PM CT' },
-  { away: 'Minnesota Vikings', home: 'Detroit Lions', homeLine: '-3.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Las Vegas Raiders', home: 'New York Jets', homeLine: '-1.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Arizona Cardinals', home: 'Dallas Cowboys', homeLine: '-7', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Atlanta Falcons', home: 'Tampa Bay Buccaneers', homeLine: '-2.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Baltimore Ravens', home: 'Buffalo Bills', homeLine: '-3', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Indianapolis Colts', home: 'Jacksonville Jaguars', homeLine: '-10.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Cleveland Browns', home: 'Pittsburgh Steelers', homeLine: '-3.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Tennessee Titans', home: 'Cincinnati Bengals', homeLine: '-11.5', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
-  { away: 'Los Angeles Chargers', home: 'Los Angeles Rams', homeLine: '-6.5', day: 'Sun', date: '11/1', time: '3:05 PM CT' },
-  { away: 'Kansas City Chiefs', home: 'Denver Broncos', homeLine: '+1.5', day: 'Sun', date: '11/1', time: '3:25 PM CT' },
-  { away: 'New England Patriots', home: 'Miami Dolphins', homeLine: '+7', day: 'Sun', date: '11/1', time: '3:25 PM CT' },
-  { away: 'Philadelphia Eagles', home: 'Washington Commanders', homeLine: '-6', day: 'Sun', date: '11/1', time: '7:20 PM CT' },
-  { away: 'Chicago Bears', home: 'Seattle Seahawks', homeLine: '-3', day: 'Mon', date: '11/2', time: '7:15 PM CT' }
+  { away: 'Carolina Panthers', home: 'Green Bay Packers', homeLine: 'OFF', day: 'Thu', date: '10/29', time: '7:15 PM CT' },
+  { away: 'Tennessee Titans', home: 'Cincinnati Bengals', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Indianapolis Colts', home: 'Jacksonville Jaguars', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Cleveland Browns', home: 'Pittsburgh Steelers', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Baltimore Ravens', home: 'Buffalo Bills', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Atlanta Falcons', home: 'Tampa Bay Buccaneers', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Minnesota Vikings', home: 'Detroit Lions', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Arizona Cardinals', home: 'Dallas Cowboys', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Las Vegas Raiders', home: 'New York Jets', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '12:00 PM CT' },
+  { away: 'Los Angeles Chargers', home: 'Los Angeles Rams', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '3:05 PM CT' },
+  { away: 'Kansas City Chiefs', home: 'Denver Broncos', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '3:25 PM CT' },
+  { away: 'New England Patriots', home: 'Miami Dolphins', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '3:25 PM CT' },
+  { away: 'Philadelphia Eagles', home: 'Washington Commanders', homeLine: 'OFF', day: 'Sun', date: '11/1', time: '7:20 PM CT' },
+  { away: 'Chicago Bears', home: 'Seattle Seahawks', homeLine: 'OFF', day: 'Mon', date: '11/2', time: '7:15 PM CT' }
 ];
 
 const week9Matchups = [
@@ -701,20 +701,20 @@ const week9Matchups = [
 ];
 
 const week10Matchups = [
-  { away: 'Washington Commanders', home: 'New York Giants', homeLine: 'OFF', day: 'Thu', date: '11/12', time: '7:15 PM CT' },
-  { away: 'New England Patriots', home: 'Detroit Lions', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '8:30 AM CT', notes: 'Munich, Germany' },
-  { away: 'Buffalo Bills', home: 'New York Jets', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Miami Dolphins', home: 'Indianapolis Colts', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Kansas City Chiefs', home: 'Atlanta Falcons', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Minnesota Vikings', home: 'Green Bay Packers', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Jacksonville Jaguars', home: 'Tennessee Titans', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Houston Texans', home: 'Cleveland Browns', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Carolina Panthers', home: 'New Orleans Saints', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
-  { away: 'Los Angeles Rams', home: 'Arizona Cardinals', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '3:05 PM CT' },
-  { away: 'Seattle Seahawks', home: 'Las Vegas Raiders', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '3:05 PM CT' },
-  { away: 'San Francisco 49ers', home: 'Dallas Cowboys', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '3:25 PM CT' },
-  { away: 'Pittsburgh Steelers', home: 'Cincinnati Bengals', homeLine: 'OFF', day: 'Sun', date: '11/15', time: '7:20 PM CT' },
-  { away: 'Los Angeles Chargers', home: 'Baltimore Ravens', homeLine: 'OFF', day: 'Mon', date: '11/16', time: '7:15 PM CT' }
+  { away: 'Washington Commanders', home: 'New York Giants', homeLine: '-2.5', day: 'Thu', date: '11/12', time: '7:15 PM CT' },
+  { away: 'New England Patriots', home: 'Detroit Lions', homeLine: '+3', day: 'Sun', date: '11/15', time: '8:30 AM CT', notes: 'Munich, Germany' },
+  { away: 'Buffalo Bills', home: 'New York Jets', homeLine: '+7.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Miami Dolphins', home: 'Indianapolis Colts', homeLine: '-4', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Kansas City Chiefs', home: 'Atlanta Falcons', homeLine: '+3.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Minnesota Vikings', home: 'Green Bay Packers', homeLine: '-3.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Jacksonville Jaguars', home: 'Tennessee Titans', homeLine: '+10.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Houston Texans', home: 'Cleveland Browns', homeLine: '+4.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Carolina Panthers', home: 'New Orleans Saints', homeLine: '-2.5', day: 'Sun', date: '11/15', time: '12:00 PM CT' },
+  { away: 'Los Angeles Rams', home: 'Arizona Cardinals', homeLine: '+9', day: 'Sun', date: '11/15', time: '3:05 PM CT' },
+  { away: 'Seattle Seahawks', home: 'Las Vegas Raiders', homeLine: '+6.5', day: 'Sun', date: '11/15', time: '3:05 PM CT' },
+  { away: 'San Francisco 49ers', home: 'Dallas Cowboys', homeLine: '+4.5', day: 'Sun', date: '11/15', time: '3:25 PM CT' },
+  { away: 'Pittsburgh Steelers', home: 'Cincinnati Bengals', homeLine: '-3.5', day: 'Sun', date: '11/15', time: '7:20 PM CT' },
+  { away: 'Los Angeles Chargers', home: 'Baltimore Ravens', homeLine: '-4', day: 'Mon', date: '11/16', time: '7:15 PM CT' }
 ];
 
 const week11Matchups = [
@@ -1033,7 +1033,7 @@ function getLocalKickoffLabel(matchup, week) {
 }
 
 function getCurrentContestWeek(date = new Date()) {
-  return 9;
+  return 10;
 }
 
 function loadPicks() {
@@ -1480,117 +1480,65 @@ function loadTestScores() {
       awayScore: 17,
       homeScore: 23
     },
-    '7|New England Patriots@Chicago Bears': {
-      awayScore: 24,
-      homeScore: 30
-    },
-    '7|Pittsburgh Steelers@New Orleans Saints': {
-      awayScore: 16,
+    '9|Jacksonville Jaguars@Baltimore Ravens': {
+      awayScore: 33,
       homeScore: 10
     },
-    '7|Tampa Bay Buccaneers@Carolina Panthers': {
-      awayScore: 43,
-      homeScore: 13
-    },
-    '7|Miami Dolphins@New York Jets': {
-      awayScore: 28,
-      homeScore: 25
-    },
-    '7|Cleveland Browns@Tennessee Titans': {
-      awayScore: 27,
-      homeScore: 24
-    },
-    '7|New York Giants@Houston Texans': {
-      awayScore: 27,
-      homeScore: 21
-    },
-    '7|San Francisco 49ers@Atlanta Falcons': {
-      awayScore: 20,
-      homeScore: 29
-    },
-    '7|Indianapolis Colts@Minnesota Vikings': {
-      awayScore: 10,
-      homeScore: 16
-    },
-    '7|Cincinnati Bengals@Baltimore Ravens': {
-      awayScore: 35,
-      homeScore: 13
-    },
-    '7|Denver Broncos@Arizona Cardinals': {
-      awayScore: 30,
-      homeScore: 16
-    },
-    '7|Los Angeles Rams@Las Vegas Raiders': {
-      awayScore: 35,
-      homeScore: 21
-    },
-    '7|Green Bay Packers@Detroit Lions': {
-      awayScore: 17,
-      homeScore: 20
-    },
-    '7|Kansas City Chiefs@Seattle Seahawks': {
-      awayScore: 3,
-      homeScore: 20
-    },
-    '7|Dallas Cowboys@Philadelphia Eagles': {
-      awayScore: 38,
-      homeScore: 21
-    },
-    '8|Carolina Panthers@Green Bay Packers': {
-      awayScore: 19,
-      homeScore: 27
-    },
-    '8|New England Patriots@Miami Dolphins': {
-      awayScore: 24,
-      homeScore: 19
-    },
-    '8|Baltimore Ravens@Buffalo Bills': {
-      awayScore: 10,
-      homeScore: 36
-    },
-    '8|Tennessee Titans@Cincinnati Bengals': {
-      awayScore: 36,
-      homeScore: 43
-    },
-    '8|Arizona Cardinals@Dallas Cowboys': {
-      awayScore: 33,
-      homeScore: 30
-    },
-    '8|Minnesota Vikings@Detroit Lions': {
-      awayScore: 15,
-      homeScore: 19
-    },
-    '8|Las Vegas Raiders@New York Jets': {
-      awayScore: 38,
-      homeScore: 33
-    },
-    '8|Cleveland Browns@Pittsburgh Steelers': {
-      awayScore: 6,
-      homeScore: 27
-    },
-    '8|Atlanta Falcons@Tampa Bay Buccaneers': {
-      awayScore: 0,
-      homeScore: 16
-    },
-    '8|Indianapolis Colts@Jacksonville Jaguars': {
-      awayScore: 7,
-      homeScore: 42
-    },
-    '8|Los Angeles Chargers@Los Angeles Rams': {
-      awayScore: 9,
-      homeScore: 24
-    },
-    '8|Kansas City Chiefs@Denver Broncos': {
-      awayScore: 24,
-      homeScore: 28
-    },
-    '8|Philadelphia Eagles@Washington Commanders': {
-      awayScore: 10,
-      homeScore: 27
-    },
-    '8|Chicago Bears@Seattle Seahawks': {
+    '9|Cincinnati Bengals@Atlanta Falcons': {
       awayScore: 34,
       homeScore: 17
+    },
+    '9|New York Jets@Kansas City Chiefs': {
+      awayScore: 12,
+      homeScore: 35
+    },
+    '9|Cleveland Browns@New Orleans Saints': {
+      awayScore: 22,
+      homeScore: 23
+    },
+    '9|Denver Broncos@Carolina Panthers': {
+      awayScore: 26,
+      homeScore: 21
+    },
+    '9|Dallas Cowboys@Indianapolis Colts': {
+      awayScore: 27,
+      homeScore: 23
+    },
+    '9|Detroit Lions@Miami Dolphins': {
+      awayScore: 19,
+      homeScore: 9
+    },
+    '9|New York Giants@Philadelphia Eagles': {
+      awayScore: 19,
+      homeScore: 11
+    },
+    '9|Los Angeles Rams@Washington Commanders': {
+      awayScore: 20,
+      homeScore: 13
+    },
+    '9|Las Vegas Raiders@San Francisco 49ers': {
+      awayScore: 17,
+      homeScore: 38
+    },
+    '9|Houston Texans@Los Angeles Chargers': {
+      awayScore: 44,
+      homeScore: 22
+    },
+    '9|Arizona Cardinals@Seattle Seahawks': {
+      awayScore: 3,
+      homeScore: 17
+    },
+    '9|Green Bay Packers@New England Patriots': {
+      awayScore: 27,
+      homeScore: 27
+    },
+    '9|Tampa Bay Buccaneers@Chicago Bears': {
+      awayScore: 24,
+      homeScore: 27
+    },
+    '9|Buffalo Bills@Minnesota Vikings': {
+      awayScore: 23,
+      homeScore: 6
     }
   };
 
@@ -2148,32 +2096,13 @@ function getMatchupKickoffDate(matchup, week) {
       hours = 0;
     }
     kickoff.setHours(hours, minutes, 0, 0);
-
-    if (explicitDateMatch) {
-      return createDateFromTimeZoneWallClock(
-        kickoff.getFullYear(),
-        kickoff.getMonth() + 1,
-        kickoff.getDate(),
-        hours,
-        minutes,
-        'America/Chicago'
-      );
-    }
   }
 
   return kickoff;
 }
 
-function canEditMatchup(matchup, week, email = currentUserEmail, playerId = 'me') {
-  if (!canEditPicksForWeek(week, email, playerId)) {
-    return false;
-  }
-
-  if (isCurrentUserCommissioner()) {
-    return true;
-  }
-
-  return getMatchupKickoffDate(matchup, week) > new Date();
+function canEditMatchup(matchup, week) {
+  return canEditPicksForWeek(week);
 }
 
 function canEditPicksForWeek(week, email = currentUserEmail, playerId = 'me') {
@@ -2628,15 +2557,6 @@ async function saveWeekPicks(playerId = null) {
     selectedTeams = selectedTeams.filter((team) => !offTeams.has(normalizeTeamName(team)));
     if (selectedLock && offTeams.has(normalizeTeamName(selectedLock))) {
       selectedLock = null;
-    }
-
-    const lockedSelectedTeam = selectedTeams.find((team) => {
-      const matchup = weekData.matchups.find((entry) => entry.away === team || entry.home === team);
-      return matchup && !canEditMatchup(matchup, selectedWeek, currentUserEmail, playerId || activeEntryId);
-    });
-    if (lockedSelectedTeam) {
-      showMessage(`${lockedSelectedTeam} is locked because its game has started.`);
-      return false;
     }
   } else {
     const lockedTeams = new Set(
@@ -3693,20 +3613,16 @@ function renderSuper7Contest() {
               const matchupKey = getMatchupKey(matchup);
               const matchupKickoffLabel = getLocalKickoffLabel(matchup, activeWeek);
               const matchupNotes = matchup.notes || '';
-              const isMatchupEditable = !isOffLine && canEditMatchup(matchup, activeWeek, currentUserEmail, activePlayer.id);
-              const matchupLockLabel = isOffLine
-                ? 'This game is on bye.'
-                : 'This game is locked because kickoff has started.';
               return `
                 <div class="matchup-row">
                   <div class="matchup-pick-row">
-                    <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.away)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${!isMatchupEditable ? `disabled title="${matchupLockLabel}"` : ''}>${matchup.away} ${awayLine}</button>
-                    ${awaySelected && isMatchupEditable ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.away) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.away)}" aria-label="${selectedLock === normalizeTeamName(matchup.away) ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === normalizeTeamName(matchup.away) ? '🔒' : '🔓'}</button>` : ''}
+                    <button type="button" class="select-team-button${awaySelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.away)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${isOffLine ? 'disabled' : ''}>${matchup.away} ${awayLine}</button>
+                    ${awaySelected && !isOffLine ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.away) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.away)}" aria-label="${selectedLock === normalizeTeamName(matchup.away) ? 'Remove Super Lock from' : 'Set'} ${matchup.away}">${selectedLock === normalizeTeamName(matchup.away) ? '🔒' : '🔓'}</button>` : ''}
                   </div>
                   <span class="matchup-vs">@</span>
                   <div class="matchup-pick-row">
-                    <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.home)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${!isMatchupEditable ? `disabled title="${matchupLockLabel}"` : ''}>${matchup.home} ${matchup.homeLine}</button>
-                    ${homeSelected && isMatchupEditable ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.home) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.home)}" aria-label="${selectedLock === normalizeTeamName(matchup.home) ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === normalizeTeamName(matchup.home) ? '🔒' : '🔓'}</button>` : ''}
+                    <button type="button" class="select-team-button home${homeSelected ? ' selected' : ''}" data-matchup-key="${matchupKey}" data-team="${normalizeTeamName(matchup.home)}" data-away="${normalizeTeamName(matchup.away)}" data-home="${normalizeTeamName(matchup.home)}" data-home-line="${matchup.homeLine}" ${isOffLine ? 'disabled' : ''}>${matchup.home} ${matchup.homeLine}</button>
+                    ${homeSelected && !isOffLine ? `<button type="button" class="super-lock-toggle${selectedLock === normalizeTeamName(matchup.home) ? ' active' : ''}" data-team="${normalizeTeamName(matchup.home)}" aria-label="${selectedLock === normalizeTeamName(matchup.home) ? 'Remove Super Lock from' : 'Set'} ${matchup.home}">${selectedLock === normalizeTeamName(matchup.home) ? '🔒' : '🔓'}</button>` : ''}
                   </div>
                   <div class="matchup-time">${matchupKickoffLabel}</div>
                   ${matchupNotes ? `<div class="matchup-note">${matchupNotes}</div>` : ''}
@@ -3779,11 +3695,6 @@ function renderSuper7Contest() {
     button.addEventListener('click', function () {
       if (!isEditableWeek) {
         showPopupMessage(`Week ${selectedWeek} is locked and can't be edited.`);
-        return;
-      }
-      const matchup = getWeekData(selectedWeek)?.matchups?.find((entry) => getMatchupKey(entry) === button.dataset.matchupKey);
-      if (matchup && !canEditMatchup(matchup, selectedWeek, currentUserEmail, activePlayer.id)) {
-        showPopupMessage('This game is locked because kickoff has started.');
         return;
       }
       const team = button.dataset.team;
