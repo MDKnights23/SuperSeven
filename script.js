@@ -1480,6 +1480,118 @@ function loadTestScores() {
       awayScore: 17,
       homeScore: 23
     },
+    '7|New England Patriots@Chicago Bears': {
+      awayScore: 24,
+      homeScore: 30
+    },
+    '7|Pittsburgh Steelers@New Orleans Saints': {
+      awayScore: 16,
+      homeScore: 10
+    },
+    '7|Tampa Bay Buccaneers@Carolina Panthers': {
+      awayScore: 43,
+      homeScore: 13
+    },
+    '7|Miami Dolphins@New York Jets': {
+      awayScore: 28,
+      homeScore: 25
+    },
+    '7|Cleveland Browns@Tennessee Titans': {
+      awayScore: 27,
+      homeScore: 24
+    },
+    '7|New York Giants@Houston Texans': {
+      awayScore: 27,
+      homeScore: 21
+    },
+    '7|San Francisco 49ers@Atlanta Falcons': {
+      awayScore: 20,
+      homeScore: 29
+    },
+    '7|Indianapolis Colts@Minnesota Vikings': {
+      awayScore: 10,
+      homeScore: 16
+    },
+    '7|Cincinnati Bengals@Baltimore Ravens': {
+      awayScore: 35,
+      homeScore: 13
+    },
+    '7|Denver Broncos@Arizona Cardinals': {
+      awayScore: 30,
+      homeScore: 16
+    },
+    '7|Los Angeles Rams@Las Vegas Raiders': {
+      awayScore: 35,
+      homeScore: 21
+    },
+    '7|Green Bay Packers@Detroit Lions': {
+      awayScore: 17,
+      homeScore: 20
+    },
+    '7|Kansas City Chiefs@Seattle Seahawks': {
+      awayScore: 3,
+      homeScore: 20
+    },
+    '7|Dallas Cowboys@Philadelphia Eagles': {
+      awayScore: 38,
+      homeScore: 21
+    },
+    '8|Carolina Panthers@Green Bay Packers': {
+      awayScore: 19,
+      homeScore: 27
+    },
+    '8|New England Patriots@Miami Dolphins': {
+      awayScore: 24,
+      homeScore: 19
+    },
+    '8|Baltimore Ravens@Buffalo Bills': {
+      awayScore: 10,
+      homeScore: 36
+    },
+    '8|Tennessee Titans@Cincinnati Bengals': {
+      awayScore: 36,
+      homeScore: 43
+    },
+    '8|Arizona Cardinals@Dallas Cowboys': {
+      awayScore: 33,
+      homeScore: 30
+    },
+    '8|Minnesota Vikings@Detroit Lions': {
+      awayScore: 15,
+      homeScore: 19
+    },
+    '8|Las Vegas Raiders@New York Jets': {
+      awayScore: 38,
+      homeScore: 33
+    },
+    '8|Cleveland Browns@Pittsburgh Steelers': {
+      awayScore: 6,
+      homeScore: 27
+    },
+    '8|Atlanta Falcons@Tampa Bay Buccaneers': {
+      awayScore: 0,
+      homeScore: 16
+    },
+    '8|Indianapolis Colts@Jacksonville Jaguars': {
+      awayScore: 7,
+      homeScore: 42
+    },
+    '8|Los Angeles Chargers@Los Angeles Rams': {
+      awayScore: 9,
+      homeScore: 24
+    },
+    '8|Kansas City Chiefs@Denver Broncos': {
+      awayScore: 24,
+      homeScore: 28
+    },
+    '8|Philadelphia Eagles@Washington Commanders': {
+      awayScore: 10,
+      homeScore: 27
+    },
+    '8|Chicago Bears@Seattle Seahawks': {
+      awayScore: 34,
+      homeScore: 17
+    },
     '9|Jacksonville Jaguars@Baltimore Ravens': {
       awayScore: 33,
       homeScore: 10
